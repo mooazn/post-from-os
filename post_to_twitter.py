@@ -44,7 +44,7 @@ class PostFromOpenSeaTwitter:
         self.driver = None
         self.tx_hash_set = {''}
 
-    def get_recent_sale(self):
+    def get_most_recent_sale(self):
         try:
             querystring = {"asset_contract_address": "0x42e10846bbc6d062d1a41a8883ce2b81015a9523",
                            "event_type": "successful",
@@ -139,7 +139,7 @@ class PostFromOpenSeaTwitter:
 
 post = PostFromOpenSeaTwitter()
 while True:
-    os_api_working = post.get_recent_sale()
+    os_api_working = post.get_most_recent_sale()
     date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
     if os_api_working:
         new_post_exists = post.parse_response_object()
