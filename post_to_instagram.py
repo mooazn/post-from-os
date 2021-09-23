@@ -51,7 +51,7 @@ class PostFromOpenSeaInstagram:
         self.tx_queue = []
         self.tx_hash_set = {''}
 
-    def get_ten_recent_sales(self):
+    def get_four_recent_sales(self):
         try:
             querystring = {"asset_contract_address": "0x42e10846bbc6d062d1a41a8883ce2b81015a9523",
                            "event_type": "successful",
@@ -176,7 +176,7 @@ class PostFromOpenSeaInstagram:
 start_time = time.time()
 post = PostFromOpenSeaInstagram()
 while True:
-    os_api_working = post.get_ten_recent_sales()
+    os_api_working = post.get_four_recent_sales()
     date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
     if os_api_working:
         new_post_exists = post.parse_response_objects()
