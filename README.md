@@ -2,7 +2,7 @@
 
 Instagram Account: 
 
-https://www.instagram.com/sirens_of_the_sea_isleofnan/
+https://www.instagram.com/sirens_of_the_sea_sales_bot/
 
 Twitter Accounts: 
 
