@@ -1,3 +1,3 @@
 file_name:file name
-twitter_tags:#tags
+twitter_tags:#tags #tags2 #tags3 ...
 contract_address:contract address of the NFT
