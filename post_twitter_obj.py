@@ -27,10 +27,7 @@ class _OpenSeaTransactionObject:
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)
-        if remaining_characters <= 13:
-            self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
-            return
-        if len(self.rare_trait_list) != 0:
+        if remaining_characters >= 13 and len(self.rare_trait_list) != 0:
             self.twitter_caption += 'Rare Traits:\n'
             full_rare_trait_sentence = ''
             for rare_trait in self.rare_trait_list:
@@ -39,7 +36,7 @@ class _OpenSeaTransactionObject:
                     break
                 full_rare_trait_sentence += next_rare_trait_sentence
             self.twitter_caption += full_rare_trait_sentence
-            self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
+        self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
 
 
 class _PostFromOpenSeaTwitter:
