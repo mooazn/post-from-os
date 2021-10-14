@@ -9,7 +9,7 @@ class _OpenSeaTransactionObject:
     twitter_caption = None
 
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_, the_date_,
-                 the_time_, link_, rare_trait_list_):
+                 the_time_, link_, rare_trait_list_, twitter_tags_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -22,16 +22,24 @@ class _OpenSeaTransactionObject:
         self.link = link_
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
+        self.twitter_tags = twitter_tags_
 
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
+        remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)
+        if remaining_characters <= 13:
+            self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
+            return
         if len(self.rare_trait_list) != 0:
             self.twitter_caption += 'Rare Traits:\n'
-            rare_trait_sentence = ''
+            full_rare_trait_sentence = ''
             for rare_trait in self.rare_trait_list:
-                rare_trait_sentence += '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
-            self.twitter_caption += rare_trait_sentence
-        self.twitter_caption += '\n\n{}'.format(self.link)
+                next_rare_trait_sentence = '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
+                if len(next_rare_trait_sentence) + len(full_rare_trait_sentence) > remaining_characters:
+                    break
+                full_rare_trait_sentence += next_rare_trait_sentence
+            self.twitter_caption += full_rare_trait_sentence
+            self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
 
 
 class _PostFromOpenSeaTwitter:
@@ -139,7 +147,8 @@ class _PostFromOpenSeaTwitter:
                 if float(trait_count / 10000) <= 0.05:
                     rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
             transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
-                                                    total_usd_cost, the_date, the_time, link, rare_trait_list)
+                                                    total_usd_cost, the_date, the_time, link, rare_trait_list,
+                                                    self.twitter_tags)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -169,13 +178,14 @@ class _PostFromOpenSeaTwitter:
             return False
 
     def post_to_twitter(self):
+        print(self.os_obj_to_post.twitter_caption)
+        return False
         try:
             image = open(self.file_name, 'rb')
             response = self.twitter.upload_media(media=image)
             image.close()
             media_id = [response['media_id']]
-            self.twitter.update_status(status=self.os_obj_to_post.twitter_caption + '\n\n' +
-                                       self.twitter_tags, media_ids=media_id)
+            self.twitter.update_status(status=self.os_obj_to_post.twitter_caption, media_ids=media_id)
             self.os_obj_to_post.is_posted = True
             return True
         except Exception as e:
