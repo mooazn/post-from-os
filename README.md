@@ -11,3 +11,5 @@ https://twitter.com/SirenSalesBot
 https://twitter.com/BoredBananasBot
 
 https://twitter.com/NoidsSalesBot
+
+## todo: add more details. 
