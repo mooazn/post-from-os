@@ -5,7 +5,7 @@ from tinydb import TinyDB, Query
 from twython import Twython
 
 
-class _OpenSeaTransactionObject:
+class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     twitter_caption = None
 
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_, the_date_,
@@ -26,8 +26,9 @@ class _OpenSeaTransactionObject:
 
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
-        remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)
-        if remaining_characters >= 13 and len(self.rare_trait_list) != 0:
+        remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
+        # the remaining characters at this stage should roughly be 130-180 characters.
+        if remaining_characters >= 13 and len(self.rare_trait_list) != 0:  # 13... why not
             self.twitter_caption += 'Rare Traits:\n'
             full_rare_trait_sentence = ''
             for rare_trait in self.rare_trait_list:
@@ -36,11 +37,12 @@ class _OpenSeaTransactionObject:
                     break
                 full_rare_trait_sentence += next_rare_trait_sentence
             self.twitter_caption += full_rare_trait_sentence
-        self.twitter_caption += '\n\n{}'.format(self.link) + '\n\n' + self.twitter_tags
+        self.twitter_caption += '\n\n' + self.link + '\n\n' + self.twitter_tags
+        # link length and tags length are already accounted for!
 
 
-class _PostFromOpenSeaTwitter:
-    def __init__(self, values_file, keys_file, db_name):
+class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes both OpenSea API and Twitter API
+    def __init__(self, values_file, keys_file, db_name):  # initialize all the fields
         twitter_values_file = values_file
         twitter_keys_file = keys_file
         tx_hash_db = db_name
@@ -71,7 +73,7 @@ class _PostFromOpenSeaTwitter:
             access_token_secret
         )
 
-    def get_recent_sales(self):
+    def get_recent_sales(self):  # gets {limit} most recent sales
         try:
             querystring = {"asset_contract_address": self.contract_address,
                            "event_type": "successful",
@@ -85,7 +87,7 @@ class _PostFromOpenSeaTwitter:
             print(e, flush=True)
             return False
 
-    def parse_response_objects(self):
+    def parse_response_objects(self):  # parses {limit} objects
         for i in range(0, self.limit):
             try:
                 base = self.response.json()['asset_events'][i]
@@ -150,7 +152,7 @@ class _PostFromOpenSeaTwitter:
             self.tx_queue.append(transaction)
         return self.process_queue()
 
-    def process_queue(self):
+    def process_queue(self):  # processes the queue thus far. this is a self-managing queue
         index = 0
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
@@ -163,7 +165,7 @@ class _PostFromOpenSeaTwitter:
         self.os_obj_to_post = self.tx_queue[0]
         return True
 
-    def download_image(self):
+    def download_image(self):  # downloads the image to upload
         try:
             img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
             img = open(self.file_name, "wb")
@@ -174,9 +176,7 @@ class _PostFromOpenSeaTwitter:
             print(e, flush=True)
             return False
 
-    def post_to_twitter(self):
-        print(self.os_obj_to_post.twitter_caption)
-        return False
+    def post_to_twitter(self):  # uploads to Twitter
         try:
             image = open(self.file_name, 'rb')
             response = self.twitter.upload_media(media=image)
@@ -189,7 +189,7 @@ class _PostFromOpenSeaTwitter:
             print(e, flush=True)
             return False
 
-    def delete_twitter_posts(self, count=200):
+    def delete_twitter_posts(self, count=200):  # deletes twitter posts. 200 max per call
         if count > 200:
             return False
         for i in self.twitter.get_user_timeline(count=count):
@@ -197,12 +197,12 @@ class _PostFromOpenSeaTwitter:
             self.twitter.destroy_status(id=status)
 
 
-class ManageFlowObj:
+class ManageFlowObj:  # Main class which does all of the operations
     def __init__(self, twitter_values_file, twitter_keys_file, tx_hash_db_name):
         self.__base_obj = _PostFromOpenSeaTwitter(twitter_values_file, twitter_keys_file, tx_hash_db_name)
         self._begin()
 
-    def run_methods(self, date_time_now):
+    def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)
 
     def check_os_api_status(self, date_time_now):
@@ -238,7 +238,7 @@ class ManageFlowObj:
             print('Post to Twitter error at roughly', date_time_now, flush=True)
             time.sleep(15)
 
-    def _begin(self):
+    def _begin(self):  # begins the fun!
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
