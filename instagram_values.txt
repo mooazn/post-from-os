@@ -2,3 +2,4 @@ file_name:name
 img_bb_key:key
 insta_tags:#tags
 page_id:id
+contract_address:contract address of the NFT
