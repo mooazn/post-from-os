@@ -1,10 +1,9 @@
 import base64
-import shutil
-import requests
-import time
 import datetime
 from email.mime.text import MIMEText
+import requests
 import smtplib
+import time
 from tinydb import TinyDB, Query
 
 
@@ -250,7 +249,7 @@ class ManageFlowObj:
         email_to = [to_email]
         email_from = username
         email_subject = "Refresh Exchange Token"
-        email_space = ","
+        email_space = ", "
         data = 'Refresh the token.'
         msg = MIMEText(data)
         msg['Subject'] = email_subject
