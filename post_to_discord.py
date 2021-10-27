@@ -177,7 +177,7 @@ class ManageFlowObj:
             embed.set_author(name="New Purchase!",
                              icon_url="icon url")
             embed.set_image(url=self.__base_obj.os_obj_to_post.image_url)
-        else:
+        else:  # change this later..
             embed = discord.Embed(title=self.__base_obj.os_obj_to_post.name, url=self.__base_obj.os_obj_to_post.link,
                                   description='Ξ{} (${})'.format(self.__base_obj.os_obj_to_post.eth_nft_price,
                                                                  self.__base_obj.os_obj_to_post.total_usd_cost) + '\n\n'
