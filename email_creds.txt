@@ -1,3 +1,0 @@
-username:email
-password:email password
-toemail:to email
