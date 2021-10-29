@@ -33,15 +33,6 @@ async def on_ready():
     pass
 
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-
-    if message.content.startswith('$hello'):
-        await message.channel.send('Hello!')
-
-
 async def process_sales():
     await client.wait_until_ready()
     channel = client.get_channel(sales_channel)
