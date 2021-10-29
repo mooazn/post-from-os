@@ -1,5 +1,0 @@
-client_id:id
-client_secret:secret
-fb_exchange_token:short-lived-token
-file:user_access_token.txt
-path:path
