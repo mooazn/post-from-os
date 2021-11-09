@@ -1,6 +1,8 @@
 import datetime
 import requests
 import time
+
+import twython.exceptions
 from tinydb import TinyDB, Query
 from twython import Twython
 
@@ -28,43 +30,47 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
         # the remaining characters at this stage should roughly be 130-180 characters.
-        if remaining_characters >= 13 and len(self.rare_trait_list) != 0:  # 13... why not
-            self.twitter_caption += 'Rare Traits:\n'
-            full_rare_trait_sentence = ''
-            for rare_trait in self.rare_trait_list:
-                next_rare_trait_sentence = '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
-                if len(next_rare_trait_sentence) + len(full_rare_trait_sentence) > remaining_characters:
-                    break
-                full_rare_trait_sentence += next_rare_trait_sentence
-            self.twitter_caption += full_rare_trait_sentence
-        self.twitter_caption += '\n\n' + self.link + '\n\n' + self.twitter_tags
+        if self.rare_trait_list is not None:
+            if remaining_characters >= 13 and len(self.rare_trait_list) != 0:  # 13... why not
+                self.twitter_caption += 'Rare Traits:\n'
+                full_rare_trait_sentence = ''
+                for rare_trait in self.rare_trait_list:
+                    next_rare_trait_sentence = '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
+                    if len(next_rare_trait_sentence) + len(full_rare_trait_sentence) > remaining_characters:
+                        break
+                    full_rare_trait_sentence += next_rare_trait_sentence
+                self.twitter_caption += full_rare_trait_sentence
+        self.twitter_caption += '\n\n' + self.link + '\n\n' + \
+                                (self.twitter_tags if self.twitter_tags != 'None' else '')
         # link length and tags length are already accounted for!
 
 
 class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes both OpenSea API and Twitter API
-    def __init__(self, values_file, keys_file, db_name):  # initialize all the fields
+    def __init__(self, address, values_file, keys_file, db_name, trait_db_name):  # initialize all the fields
         twitter_values_file = values_file
         twitter_keys_file = keys_file
-        tx_hash_db = db_name
         values = open(twitter_values_file, 'r')
-        self.file_name = values.readline().split(":")[1].strip()
-        self.twitter_tags = values.readline().split(":")[1]
-        self.contract_address = values.readline().split(":")[1].strip()
+        self.file_name = values.readline().strip()
+        self.twitter_tags = values.readline().strip()
+        self.collection_name = values.readline().strip()
         values.close()
+        self.contract_address = address
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
         self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.response = None
         self.os_obj_to_post = None
         self.driver = None
-        self.tx_db = TinyDB(tx_hash_db)
+        self.tx_db = TinyDB(db_name)
         self.tx_query = Query()
+        self.trait_db = TinyDB(trait_db_name)
+        self.trait_query = Query()
         self.tx_queue = []
         self.limit = 10
         twitter_keys = open(twitter_keys_file, 'r')
-        api_key = twitter_keys.readline().split(":")[1].strip()
-        api_key_secret = twitter_keys.readline().split(":")[1].strip()
-        access_token = twitter_keys.readline().split(":")[1].strip()
-        access_token_secret = twitter_keys.readline().split(":")[1].strip()
+        api_key = twitter_keys.readline().strip()
+        api_key_secret = twitter_keys.readline().strip()
+        access_token = twitter_keys.readline().strip()
+        access_token_secret = twitter_keys.readline().strip()
         twitter_keys.close()
         self.twitter = Twython(
             api_key,
@@ -72,6 +78,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             access_token,
             access_token_secret
         )
+
+    def __del__(self):
+        self.twitter.client.close()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
@@ -122,29 +131,33 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
             if tx_exists:
                 continue
-            self.tx_db.insert({'tx': tx_hash})
-            token_id = asset['token_id']
-            eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
-            usd_price = float(base['payment_token']['usd_price'])
-            total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
-            timestamp = str(base['transaction']['timestamp']).split('T')
-            date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
-            month = datetime.date(date.year, date.month, date.day).strftime('%B')
+            try:
+                token_id = asset['token_id']
+                eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                usd_price = float(base['payment_token']['usd_price'])
+                total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                timestamp = str(base['transaction']['timestamp']).split('T')
+                date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
+                month = datetime.date(date.year, date.month, date.day).strftime('%B')
+            except (ValueError, TypeError):
+                continue
             year = str(date.year)
             day = str(date.day)
             the_date = month + ' ' + day + ', ' + year
             the_time = timestamp[1]
             link = asset['permalink']
             asset_url = self.os_asset_url + self.contract_address + '/' + token_id
-            asset_response = requests.request("GET", asset_url)
-            traits = asset_response.json()['traits']
             rare_trait_list = []
-            for trait in traits:
-                trait_type = trait['trait_type']
-                trait_value = trait['value']
-                trait_count = trait['trait_count']
-                if float(trait_count / 10000) <= 0.05:
-                    rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
+            asset_response = requests.request("GET", asset_url)
+            if asset_response.status_code == 200:
+                traits = asset_response.json()['traits']
+                for trait in traits:
+                    trait_type = trait['trait_type']
+                    trait_value = trait['value']
+                    trait_count = trait['trait_count']
+                    if float(trait_count / 10000) <= 0.05:
+                        rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
+            self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
                                                     total_usd_cost, the_date, the_time, link, rare_trait_list,
                                                     self.twitter_tags)
@@ -198,9 +211,80 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
 
 class ManageFlowObj:  # Main class which does all of the operations
-    def __init__(self, twitter_values_file, twitter_keys_file, tx_hash_db_name):
-        self.__base_obj = _PostFromOpenSeaTwitter(twitter_values_file, twitter_keys_file, tx_hash_db_name)
+    def __init__(self, twitter_values_file, twitter_keys_file, tx_hash_db_name, trait_db_name=None):
+        self.twitter_values_file = twitter_values_file
+        self.twitter_keys_file = twitter_keys_file
+        self.tx_hash_db_name = tx_hash_db_name
+        self.trait_db_name = trait_db_name
+        cont_address = self.validate_params()
+        print('All files are validated. Beginning program...')
+        self.__base_obj = _PostFromOpenSeaTwitter(cont_address, self.twitter_values_file, self.twitter_keys_file,
+                                                  self.tx_hash_db_name, self.trait_db_name)
         self._begin()
+
+    def validate_params(self):
+        values_file_test = open(self.twitter_values_file, 'r')
+        image_ext_test = values_file_test.readline().strip()
+        if not image_ext_test.lower().endswith(('.jpeg', '.jpg', '.png')):
+            values_file_test.close()
+            raise Exception('Image file must either be jpg, jpeg, or png')
+        hashtags_test = values_file_test.readline().strip()
+        hashtags = 0
+        words_in_hash_tag = hashtags_test.split()
+        if len(hashtags_test) >= 120:
+            values_file_test.close()
+            raise Exception('Too many characters in hashtags.')
+        if len(words_in_hash_tag) > 10:
+            values_file_test.close()
+            raise Exception('Too many hashtags.')
+        if hashtags_test != 'None':
+            for word in words_in_hash_tag:
+                if word[0] == '#':
+                    hashtags += 1
+            if hashtags != len(words_in_hash_tag):
+                values_file_test.close()
+                raise Exception('All words must be preceded by a hashtag (#).')
+        collection_name_test = values_file_test.readline().strip()
+        test_collection_name_url = "https://api.opensea.io/api/v1/collection/{}".format(collection_name_test)
+        test_response = requests.request("GET", test_collection_name_url)
+        if test_response.status_code == 200:
+            collection_json = test_response.json()['collection']
+            primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
+            contract_address = primary_asset_contracts_json['address']
+        else:
+            raise Exception('The provided collection name does not exist.')
+        values_file_test.close()
+        print('Validation of Twitter Values .txt complete. No errors found...')
+        keys_file_test = open(self.twitter_keys_file, 'r')
+        api_key = keys_file_test.readline().strip()
+        api_key_secret = keys_file_test.readline().strip()
+        access_token = keys_file_test.readline().strip()
+        access_token_secret = keys_file_test.readline().strip()
+        twitter_test = Twython(
+            api_key,
+            api_key_secret,
+            access_token,
+            access_token_secret
+        )
+        try:
+            twitter_test.verify_credentials()
+            twitter_test.client.close()
+            keys_file_test.close()
+        except twython.exceptions.TwythonAuthError:
+            keys_file_test.close()
+            twitter_test.client.close()
+            raise Exception('Invalid Twitter Keys supplied.')
+        print('Validation of Twitter Keys .txt complete. No errors found...')
+        if not str(self.tx_hash_db_name).lower().endswith('.json'):
+            raise Exception('Transaction Hash DB must end with a .json file extension.')
+        print('Validation of TX Hash DB Name .json complete. No errors found...')
+        if self.trait_db_name is not None:
+            if not str(self.trait_db_name).lower().endswith('.json'):
+                raise Exception('Trait DB must end with a .json file extension.')
+            print('Validation of Trait DB Name .json complete. No errors found...')
+        else:
+            print('Skipping Trait DB Name .json. No file was provided.')
+        return contract_address
 
     def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)
@@ -232,13 +316,13 @@ class ManageFlowObj:  # Main class which does all of the operations
     def try_to_post_to_twitter(self, date_time_now):
         posted_to_twitter = self.__base_obj.post_to_twitter()
         if posted_to_twitter:
-            print('Posted to Twitter roughly', date_time_now, flush=True)
+            print('Posted to Twitter at roughly', date_time_now, flush=True)
             time.sleep(5)
         else:
             print('Post to Twitter error at roughly', date_time_now, flush=True)
             time.sleep(15)
 
-    def _begin(self):  # begins the fun!
+    def _begin(self):  # begin program!
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
