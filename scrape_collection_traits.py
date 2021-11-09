@@ -82,31 +82,15 @@ class ScrapeCollectionTraits:
         self.start_time = None
         self.end_time = None
         self.iteration_num = 1
-        cloudflare_scraper_tries = 0
-        cloudflare_scraper_valid = False
-        res_json = None
-        while True:
-            if cloudflare_scraper_tries == 5:
-                break
-            try:
-                res_json = self.automated_browsers.get_traits_via_cloudflare_scraper(self.contract_address, 50)
-                cloudflare_scraper_valid = True
-                break
-            except IndexError:
-                pass
-            cloudflare_scraper_tries += 1
-        if not cloudflare_scraper_valid:
-            res_json = self.automated_browsers.get_traits_via_selenium(self.contract_address, 50)
-        if res_json is None:
-            print('Skip this, I tried everything.')
-        print(res_json)
-        # self.scrape()
-        # self.print_time_taken()
+        self.scrape()
+        self.print_time_taken()
 
     def scrape(self):
         self.start_time = time.time()
-        missed_assets = []
+        missed_assets = [-1]
         while len(missed_assets) != 0:
+            if -1 in missed_assets:
+                missed_assets.remove(-1)
             assets = range(1, self.collection_count) if self.iteration_num == 1 else missed_assets
             for asset in assets:
                 asset_trait_exists = True if len(self.db.search(self.db_query.id == asset)) == 1 else False
@@ -119,12 +103,35 @@ class ScrapeCollectionTraits:
                     if asset_response.status_code == 200:
                         traits = asset_response.json()['traits']
                         self.db.insert({'id': asset, 'traits': str(traits)})
-                        print('Inserted', asset)
+                        print('Inserted', asset, 'normally')
                         if asset in missed_assets:
                             missed_assets.remove(asset)
                     elif asset_response.status_code == 429:
-                        missed_assets.append(asset)
                         print('429 encountered.')
+                        cloudflare_scraper_tries = 0
+                        cloudflare_scraper_is_valid = False
+                        res_json = None
+                        while True:
+                            if cloudflare_scraper_tries == 5:
+                                break
+                            try:
+                                res_json = self.automated_browsers.get_traits_via_cloudflare_scraper(
+                                    self.contract_address, asset)
+                                cloudflare_scraper_is_valid = True
+                                break
+                            except IndexError:
+                                pass
+                            cloudflare_scraper_tries += 1
+                        if not cloudflare_scraper_is_valid:
+                            res_json = self.automated_browsers.get_traits_via_selenium(self.contract_address, asset)
+                            print('Inserted', asset, 'via selenium.')
+                        else:
+                            print('Inserted', asset, 'via cloud scraper.')
+                        if res_json is None:
+                            print('Skip asset for now :( I tried everything.')
+                            missed_assets.append(asset)
+                            continue
+                        self.db.insert({'id': asset, 'traits': str(res_json)})
                     else:
                         print(asset_response.status_code)
             if len(self.db) != self.total_supply:
@@ -142,6 +149,7 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
         self.os_asset_url = 'https://opensea.io/assets/'
         self.selenium_driver = None
         self.cloudflare_scraper = None
+        self.current_result = None
 
     def get_traits_via_cloudflare_scraper(self, c_address, t_id):
         self.cloudflare_scraper = cloudscraper.create_scraper()
@@ -164,6 +172,7 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
             cloudflare_asset_rarity = get_percentage_from_rarity(cloudflare_asset_rarity)
             cloudflare_asset_traits.append([cloudflare_asset_type, cloudflare_asset_value, cloudflare_asset_rarity])
         result = generate_json(cloudflare_asset_traits)
+        self.current_result = result
         return result
 
     def get_traits_via_selenium(self, c_address, t_id):
@@ -184,4 +193,5 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
         self.selenium_driver.close()
         self.selenium_driver.quit()
         result = generate_json(selenium_asset_traits)
+        self.current_result = result
         return result
