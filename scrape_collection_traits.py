@@ -64,18 +64,14 @@ class ScrapeCollectionTraits:
         collection_count += 1
         validate_params(collection_db_name, collection_name, collection_count)
         print('Parameters are validated. Beginning program...')
-        self.automated_browsers = ScrapeCollectionTraitsViaAutomatedBrowsers()
         self.db = TinyDB(collection_db_name)
         self.db_query = Query()
-        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.collection_name = collection_name
-        collection_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
-        collection_response = requests.request("GET", collection_url)
-        collection_json = collection_response.json()['collection']
-        traits_json = collection_json['traits']
-        populate_trait_dict(traits_json, collection_trait_dict)
-        stats_json = collection_json['stats']
-        primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]
+        resp_variables = self.send_requests_for_variables()
+        stats_json = resp_variables[0]
+        primary_asset_contracts_json = resp_variables[1]
+        self.automated_browsers = ScrapeCollectionTraitsViaAutomatedBrowsers()
+        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.total_supply = int(stats_json['total_supply'])
         self.collection_count = max(collection_count, self.total_supply)
         self.contract_address = primary_asset_contracts_json['address']
@@ -84,6 +80,16 @@ class ScrapeCollectionTraits:
         self.iteration_num = 1
         self.scrape()
         self.print_time_taken()
+
+    def send_requests_for_variables(self):
+        collection_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
+        collection_response = requests.request("GET", collection_url)
+        collection_json = collection_response.json()['collection']
+        traits_json = collection_json['traits']
+        populate_trait_dict(traits_json, collection_trait_dict)
+        stats_json = collection_json['stats']
+        primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]
+        return [stats_json, primary_asset_contracts_json]
 
     def scrape(self):
         self.start_time = time.time()
@@ -147,6 +153,8 @@ class ScrapeCollectionTraits:
                 print('There are currently', self.total_supply - len(self.db), 'missed assets.')
             self.iteration_num += 1
         self.end_time = time.time()
+        self.automated_browsers.selenium_driver.close()
+        self.automated_browsers.selenium_driver.quit()
         print('Finished.')
 
     def print_time_taken(self):
@@ -156,7 +164,7 @@ class ScrapeCollectionTraits:
 class ScrapeCollectionTraitsViaAutomatedBrowsers:
     def __init__(self):
         self.os_asset_url = 'https://opensea.io/assets/'
-        self.selenium_driver = None
+        self.selenium_driver = webdriver.Chrome(ChromeDriverManager().install())
         self.cloudflare_scraper = None
         self.current_result = None
 
@@ -185,7 +193,6 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
         return result
 
     def get_traits_via_selenium(self, c_address, t_id):
-        self.selenium_driver = webdriver.Chrome(ChromeDriverManager().install())
         self.selenium_driver.get('{}{}/{}'.format(self.os_asset_url, c_address, str(t_id)))
         self.selenium_driver.implicitly_wait(3)
         prop_types = self.selenium_driver.find_elements_by_class_name('Property--type')
@@ -199,8 +206,6 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
             selenium_asset_rarity = prop_rarities[num].get_attribute('innerHTML')
             selenium_asset_rarity = get_percentage_from_rarity(selenium_asset_rarity)
             selenium_asset_traits.append([selenium_asset_type, selenium_asset_value, selenium_asset_rarity])
-        self.selenium_driver.close()
-        self.selenium_driver.quit()
         result = generate_json(selenium_asset_traits)
         self.current_result = result
         return result
