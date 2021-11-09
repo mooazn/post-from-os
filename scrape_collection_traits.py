@@ -112,7 +112,9 @@ class ScrapeCollectionTraits:
                         cloudflare_scraper_is_valid = False
                         res_json = None
                         while True:
+                            print('Trying to scrape with cloudflare scraper...')
                             if cloudflare_scraper_tries == 5:
+                                print('Cloudflare scraper failed.')
                                 break
                             try:
                                 res_json = self.automated_browsers.get_traits_via_cloudflare_scraper(
@@ -122,18 +124,23 @@ class ScrapeCollectionTraits:
                             except IndexError:
                                 pass
                             cloudflare_scraper_tries += 1
+                            time.sleep(0.5)
                         if not cloudflare_scraper_is_valid:
+                            print('Fallback to selenium.')
                             res_json = self.automated_browsers.get_traits_via_selenium(self.contract_address, asset)
+                            if not res_json:
+                                print('False 429! Cloudflare scraper did not fail. This is a 404 on', asset)
+                                continue
                             print('Inserted', asset, 'via selenium.')
                         else:
                             print('Inserted', asset, 'via cloud scraper.')
                         if res_json is None:
-                            print('Skip asset for now :( I tried everything.')
+                            print('Nothing works, skip asset for now :( I tried everything!')
                             missed_assets.append(asset)
                             continue
                         self.db.insert({'id': asset, 'traits': str(res_json)})
                     else:
-                        print(asset_response.status_code)
+                        print(asset_response.status_code, 'on', asset)
                 else:
                     print(asset, 'already exists.')
             if len(self.db) != self.total_supply:
@@ -180,7 +187,7 @@ class ScrapeCollectionTraitsViaAutomatedBrowsers:
     def get_traits_via_selenium(self, c_address, t_id):
         self.selenium_driver = webdriver.Chrome(ChromeDriverManager().install())
         self.selenium_driver.get('{}{}/{}'.format(self.os_asset_url, c_address, str(t_id)))
-        self.selenium_driver.implicitly_wait(5)
+        self.selenium_driver.implicitly_wait(3)
         prop_types = self.selenium_driver.find_elements_by_class_name('Property--type')
         prop_values = self.selenium_driver.find_elements_by_class_name('Property--value')
         prop_rarities = self.selenium_driver.find_elements_by_class_name('Property--rarity')
