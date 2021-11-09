@@ -134,6 +134,8 @@ class ScrapeCollectionTraits:
                         self.db.insert({'id': asset, 'traits': str(res_json)})
                     else:
                         print(asset_response.status_code)
+                else:
+                    print(asset, 'already exists.')
             if len(self.db) != self.total_supply:
                 print('There are currently', self.total_supply - len(self.db), 'missed assets.')
             self.iteration_num += 1
