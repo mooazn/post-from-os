@@ -1,26 +1,47 @@
 from post_to_twitter_obj import ManageFlowObj
 
 
-mfo = ManageFlowObj('Twitter Values.txt', 'Twitter Keys.txt', 'DB Name.json')
+ex = ManageFlowObj('Twitter Values .txt', 'Twitter Keys .txt', 'TX Hash DB .json', 'Trait DB .json')
 
 # The Twitter Values file (txt) must be like shown below:
 
-# file_name:[put the name of the .jpeg file (with the extension) you want]
-# twitter_tags:[put normal hashtags here separated by a space. i.e. #crypto #nfts ...]
-# contract_address:[contract address here. can be found on the project's Ether scan or just in the link of an asset]
-
-# The Twitter Keys file (txt) must be like shown below:
-
-# api_key:[twitter api key]I
-# api_key_secret:[twitter api key secret]
-# access_token:[twitter access token]
-# access_token_secret:[twitter access token secret]
-
-# More info can be found on the Twitter documentation. you must apply and create an app.
-# https://developer.twitter.com/en
-
-# The last provided string (DB Name) is the .json file name for the TinyDB. The DB used to make sure each post is unique
-# and is also helpful in case you have to restart the program (duplicates will not be posted).
+# put the name of the .jpeg file (with the extension) you want
+# put normal hashtags here separated by a space. i.e. #crypto #nfts ...
+# collection name here. can be found in the URL of the homepage of a collection.
 
 # for example:
-# mfo = ManageFlowObj('twitter_values_humanoids.txt', 'twitter_keys_humanoids.txt', 'humanoids_tx_hash_db.json')
+# -----twitter_values.txt-----
+# nft.jpeg
+# #nfts
+# my-nft
+
+# The Twitter Keys file (txt) must be like shown below: (More info can be found on the Twitter documentation.
+# you must apply and create an app. https://developer.twitter.com/en)
+
+# twitter api key
+# twitter api key secret
+# twitter access token
+# twitter access token secret
+
+# for example:
+# -----twitter_keys.txt-----
+# api_key
+# api_key_secret
+# access_token
+# access_token_secret
+
+# The next provided string (DB Name) is the .json file name for the transaction TinyDB. The DB used to make sure each
+# post is unique and is also helpful in case you have to restart the program (duplicates will not be posted)
+
+# for example:
+# nft_tx_hash_db.json
+
+# The last provided string (Trait DB Name) is the .json file name for the trait TinyDB. This DB is used to efficiently
+# query traits of a collection without hitting the asset endpoint (defaulted to None. if you do not pass a string in,
+# traits will not be printed in the output)
+
+# for example:
+# nft_trait_db.json
+
+# example instantiator:
+mfo = ManageFlowObj('twitter_values_humanoids.txt', 'twitter_keys_humanoids.txt', 'humanoids_tx_hash_db.json', 'humanoids_trait_db.json')
