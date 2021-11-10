@@ -1,7 +1,6 @@
 import datetime
 import requests
 import time
-
 import twython.exceptions
 from tinydb import TinyDB, Query
 from twython import Twython
@@ -46,7 +45,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
 
 
 class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes both OpenSea API and Twitter API
-    def __init__(self, address, values_file, keys_file, db_name, trait_db_name):  # initialize all the fields
+    def __init__(self, address, supply, values_file, keys_file, db_name, trait_db_name):  # initialize all the fields
         twitter_values_file = values_file
         twitter_keys_file = keys_file
         values = open(twitter_values_file, 'r')
@@ -55,6 +54,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.collection_name = values.readline().strip()
         values.close()
         self.contract_address = address
+        self.total_supply = supply
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
         self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.response = None
@@ -81,6 +81,14 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
     def __del__(self):
         self.twitter.client.close()
+
+    def create_rare_trait_list(self, traits, rare_trait_list):
+        for trait in traits:
+            trait_type = trait['trait_type']
+            trait_value = trait['value']
+            trait_count = trait['trait_count']
+            if float(trait_count / self.total_supply) <= 0.05:
+                rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
@@ -148,20 +156,21 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             link = asset['permalink']
             asset_url = self.os_asset_url + self.contract_address + '/' + token_id
             rare_trait_list = []
-            asset_response = requests.request("GET", asset_url)
-            if asset_response.status_code == 200:
-                traits = asset_response.json()['traits']
-                for trait in traits:
-                    trait_type = trait['trait_type']
-                    trait_value = trait['value']
-                    trait_count = trait['trait_count']
-                    if float(trait_count / 10000) <= 0.05:
-                        rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
+            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+            if asset_from_db:
+                traits = eval(asset_from_db[0]['traits'])
+                self.create_rare_trait_list(traits, rare_trait_list)
+            if not rare_trait_list:
+                asset_response = requests.request("GET", asset_url)
+                if asset_response.status_code == 200:
+                    traits = asset_response.json()['traits']
+                    self.create_rare_trait_list(traits, rare_trait_list)
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
                                                     total_usd_cost, the_date, the_time, link, rare_trait_list,
                                                     self.twitter_tags)
             transaction.create_twitter_caption()
+            print(transaction.twitter_caption)
             self.tx_queue.append(transaction)
         return self.process_queue()
 
@@ -216,10 +225,12 @@ class ManageFlowObj:  # Main class which does all of the operations
         self.twitter_keys_file = twitter_keys_file
         self.tx_hash_db_name = tx_hash_db_name
         self.trait_db_name = trait_db_name
-        cont_address = self.validate_params()
+        collection_stats = self.validate_params()
+        cont_address = collection_stats[0]
+        supply = collection_stats[1]
         print('All files are validated. Beginning program...')
-        self.__base_obj = _PostFromOpenSeaTwitter(cont_address, self.twitter_values_file, self.twitter_keys_file,
-                                                  self.tx_hash_db_name, self.trait_db_name)
+        self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file,
+                                                  self.twitter_keys_file, self.tx_hash_db_name, self.trait_db_name)
         self._begin()
 
     def validate_params(self):
@@ -249,6 +260,8 @@ class ManageFlowObj:  # Main class which does all of the operations
         test_response = requests.request("GET", test_collection_name_url)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
+            stats_json = collection_json['stats']
+            total_supply = int(stats_json['total_supply'])
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
             contract_address = primary_asset_contracts_json['address']
         else:
@@ -284,7 +297,7 @@ class ManageFlowObj:  # Main class which does all of the operations
             print('Validation of Trait DB Name .json complete. No errors found...')
         else:
             print('Skipping Trait DB Name .json. No file was provided.')
-        return contract_address
+        return [contract_address, total_supply]
 
     def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)
