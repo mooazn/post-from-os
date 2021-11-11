@@ -60,7 +60,6 @@ def get_percentage_from_rarity(rarity):
 
 class ScrapeCollectionTraits:
     def __init__(self, collection_db_name, collection_name, collection_count=5000):
-        global collection_trait_dict
         collection_count += 1
         validate_params(collection_db_name, collection_name, collection_count)
         print('Parameters are validated. Beginning program...')
@@ -82,6 +81,7 @@ class ScrapeCollectionTraits:
         self.print_time_taken()
 
     def send_requests_for_variables(self):
+        global collection_trait_dict
         collection_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
         collection_response = requests.request("GET", collection_url)
         collection_json = collection_response.json()['collection']
@@ -149,8 +149,7 @@ class ScrapeCollectionTraits:
                         print(asset_response.status_code, 'on', asset)
                 else:
                     print(asset, 'already exists.')
-            if len(self.db) != self.total_supply:
-                print('There are currently', self.total_supply - len(self.db), 'missed assets.')
+            print(missed_assets)
             self.iteration_num += 1
         self.end_time = time.time()
         self.automated_browsers.selenium_driver.close()
