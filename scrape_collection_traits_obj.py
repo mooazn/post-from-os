@@ -1,6 +1,6 @@
 from scrape_collection_traits import ScrapeCollectionTraits
 
-sct = ScrapeCollectionTraits('DB Name.json', 'Collection Name', 123)
+ex = ScrapeCollectionTraits('DB Name.json', 'Collection Name', 123)
 
 # This file scrapes traits for the provided collection. The parameters are explained below:
 
@@ -11,7 +11,7 @@ sct = ScrapeCollectionTraits('DB Name.json', 'Collection Name', 123)
 # on the main page of the collection on OpenSea. The easiest way is to extract the name from the URL. for example:
 # https://opensea.io/collection/boredapeyachtclub. You would extract 'boredapeyachtclub' and put that as the 2nd param.
 
-# The last parameter is not necessary. It is defaulted to 4000.
+# The last parameter is not necessary. It is defaulted to 5000.
 # However, it is preferred to provide it if you know the MAX COLLECTION SIZE (not
 # the number there are right now). A collection could be still be minting and have 2000/5000 total so far. You MUST
 # provide 5000 in this case, not 2000. another case is mints in the same project. for instance, if a project has
@@ -20,4 +20,4 @@ sct = ScrapeCollectionTraits('DB Name.json', 'Collection Name', 123)
 # really only makes sense to use for projects that have finished minting completely so you get accurate results.
 
 # Ex.
-# sct = ScrapeCollectionTraits('humanoids_trait_db.json', 'thehumanoids', 10000)
+sct = ScrapeCollectionTraits('humanoids_trait_db.json', 'thehumanoids', 10000)
