@@ -1,30 +1,22 @@
 from post_to_twitter_obj import ManageFlowObj
 
 
-ex = ManageFlowObj('Twitter Values .txt', 'Twitter Keys .txt', 'TX Hash DB .json', 'Trait DB .json')
+ex = ManageFlowObj('Twitter Values .txt', 'TX Hash DB .json', 'Trait DB.json')
 
-# The Twitter Values file (txt) must be like shown below:
+# The Twitter Values file (txt) must be like shown below (More info for keys can be found on the Twitter documentation.
+# you must apply and create an app. https://developer.twitter.com/en):
 
-# put the name of the .jpeg file (with the extension) you want
 # put normal hashtags here separated by a space. i.e. #crypto #nfts ...
 # collection name here. can be found in the URL of the homepage of a collection.
-
-# for example:
-# -----twitter_values.txt-----
-# nft.jpeg
-# #nfts
-# my-nft
-
-# The Twitter Keys file (txt) must be like shown below: (More info can be found on the Twitter documentation.
-# you must apply and create an app. https://developer.twitter.com/en)
-
 # twitter api key
 # twitter api key secret
 # twitter access token
 # twitter access token secret
 
 # for example:
-# -----twitter_keys.txt-----
+# -----twitter_values.txt-----
+# #nfts
+# my-nft
 # api_key
 # api_key_secret
 # access_token
@@ -44,4 +36,4 @@ ex = ManageFlowObj('Twitter Values .txt', 'Twitter Keys .txt', 'TX Hash DB .json
 # nft_trait_db.json
 
 # example instantiator:
-mfo = ManageFlowObj('twitter_values_humanoids.txt', 'twitter_keys_humanoids.txt', 'humanoids_tx_hash_db.json', 'humanoids_trait_db.json')
+mfo = ManageFlowObj('twitter_values_humanoids.txt', 'humanoids_tx_hash_db.json', 'humanoids_trait_db.json')
