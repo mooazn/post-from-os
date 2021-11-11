@@ -45,14 +45,17 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
 
 
 class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes both OpenSea API and Twitter API
-    def __init__(self, address, supply, values_file, keys_file, db_name, trait_db_name):  # initialize all the fields
+    def __init__(self, address, supply, values_file, db_name, trait_db_name):  # initialize all the fields
         twitter_values_file = values_file
-        twitter_keys_file = keys_file
         values = open(twitter_values_file, 'r')
-        self.file_name = values.readline().strip()
         self.twitter_tags = values.readline().strip()
         self.collection_name = values.readline().strip()
+        api_key = values.readline().strip()
+        api_key_secret = values.readline().strip()
+        access_token = values.readline().strip()
+        access_token_secret = values.readline().strip()
         values.close()
+        self.file_name = self.collection_name + '.jpeg'
         self.contract_address = address
         self.total_supply = supply
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
@@ -66,12 +69,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.trait_query = Query()
         self.tx_queue = []
         self.limit = 10
-        twitter_keys = open(twitter_keys_file, 'r')
-        api_key = twitter_keys.readline().strip()
-        api_key_secret = twitter_keys.readline().strip()
-        access_token = twitter_keys.readline().strip()
-        access_token_secret = twitter_keys.readline().strip()
-        twitter_keys.close()
         self.twitter = Twython(
             api_key,
             api_key_secret,
@@ -87,8 +84,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             trait_type = trait['trait_type']
             trait_value = trait['value']
             trait_count = trait['trait_count']
-            if float(trait_count / self.total_supply) <= 0.05:
-                rare_trait_list.append([trait_type, trait_value, float(trait_count / 100)])
+            rarity_decimal = float(trait_count / self.total_supply)
+            if rarity_decimal <= 0.05:
+                rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
@@ -170,7 +168,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                                                     total_usd_cost, the_date, the_time, link, rare_trait_list,
                                                     self.twitter_tags)
             transaction.create_twitter_caption()
-            print(transaction.twitter_caption)
             self.tx_queue.append(transaction)
         return self.process_queue()
 
@@ -220,25 +217,20 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
 
 class ManageFlowObj:  # Main class which does all of the operations
-    def __init__(self, twitter_values_file, twitter_keys_file, tx_hash_db_name, trait_db_name=None):
+    def __init__(self, twitter_values_file, tx_hash_db_name, trait_db_name=None):
         self.twitter_values_file = twitter_values_file
-        self.twitter_keys_file = twitter_keys_file
         self.tx_hash_db_name = tx_hash_db_name
         self.trait_db_name = trait_db_name
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
         print('All files are validated. Beginning program...')
-        self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file,
-                                                  self.twitter_keys_file, self.tx_hash_db_name, self.trait_db_name)
+        self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file, self.tx_hash_db_name,
+                                                  self.trait_db_name)
         self._begin()
 
     def validate_params(self):
         values_file_test = open(self.twitter_values_file, 'r')
-        image_ext_test = values_file_test.readline().strip()
-        if not image_ext_test.lower().endswith(('.jpeg', '.jpg', '.png')):
-            values_file_test.close()
-            raise Exception('Image file must either be jpg, jpeg, or png')
         hashtags_test = values_file_test.readline().strip()
         hashtags = 0
         words_in_hash_tag = hashtags_test.split()
@@ -265,14 +257,12 @@ class ManageFlowObj:  # Main class which does all of the operations
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
             contract_address = primary_asset_contracts_json['address']
         else:
+            values_file_test.close()
             raise Exception('The provided collection name does not exist.')
-        values_file_test.close()
-        print('Validation of Twitter Values .txt complete. No errors found...')
-        keys_file_test = open(self.twitter_keys_file, 'r')
-        api_key = keys_file_test.readline().strip()
-        api_key_secret = keys_file_test.readline().strip()
-        access_token = keys_file_test.readline().strip()
-        access_token_secret = keys_file_test.readline().strip()
+        api_key = values_file_test.readline().strip()
+        api_key_secret = values_file_test.readline().strip()
+        access_token = values_file_test.readline().strip()
+        access_token_secret = values_file_test.readline().strip()
         twitter_test = Twython(
             api_key,
             api_key_secret,
@@ -282,12 +272,12 @@ class ManageFlowObj:  # Main class which does all of the operations
         try:
             twitter_test.verify_credentials()
             twitter_test.client.close()
-            keys_file_test.close()
+            values_file_test.close()
         except twython.exceptions.TwythonAuthError:
-            keys_file_test.close()
+            values_file_test.close()
             twitter_test.client.close()
             raise Exception('Invalid Twitter Keys supplied.')
-        print('Validation of Twitter Keys .txt complete. No errors found...')
+        print('Validation of Twitter Values .txt complete. No errors found...')
         if not str(self.tx_hash_db_name).lower().endswith('.json'):
             raise Exception('Transaction Hash DB must end with a .json file extension.')
         print('Validation of TX Hash DB Name .json complete. No errors found...')
