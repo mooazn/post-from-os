@@ -1,10 +1,15 @@
 import base64
 import datetime
 from email.mime.text import MIMEText
+import os
+import pyperclip
 import requests
+import selenium.common.exceptions
+from selenium import webdriver
 import smtplib
 import time
 from tinydb import TinyDB, Query
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 class _OpenSeaTransactionObjectInstagram:
@@ -25,8 +30,8 @@ class _OpenSeaTransactionObjectInstagram:
         self.is_posted = False
 
     def create_insta_caption(self):
-        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their Siren to {} for ' \
-                             'the price of ${}!\n\nAt the time of purchase, the price of the Siren was {} ETH and ' \
+        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
+                             'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} ETH and ' \
                              'the price of ETH was ${}.\n\n{}'.format(self.name, self.the_date, self.the_time,
                                                                       self.seller, self.buyer, self.total_usd_cost,
                                                                       self.eth_nft_price, self.usd_price,
@@ -96,20 +101,23 @@ class _PostFromOpenSeaInstagram:
                 buyer = buyer_address[0:8]
             if seller_address == buyer_address or seller == buyer:
                 continue
-            eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
-            usd_price = float(base['payment_token']['usd_price'])
-            total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
-            timestamp = str(base['transaction']['timestamp']).split('T')
-            date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
-            month = datetime.date(date.year, date.month, date.day).strftime('%B')
-            year = str(date.year)
-            day = str(date.day)
-            the_date = month + ' ' + day + ', ' + year
-            the_time = timestamp[1]
             tx_hash = str(base['transaction']['transaction_hash'])
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
             if tx_exists:
                 continue
+            try:
+                eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                usd_price = float(base['payment_token']['usd_price'])
+                total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                timestamp = str(base['transaction']['timestamp']).split('T')
+                date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
+                month = datetime.date(date.year, date.month, date.day).strftime('%B')
+            except (ValueError, TypeError):
+                continue
+            year = str(date.year)
+            day = str(date.day)
+            the_date = month + ' ' + day + ', ' + year
+            the_time = timestamp[1]
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, eth_nft_price, usd_price,
                                                              total_usd_cost, the_date, the_time, self.insta_tags)
@@ -186,13 +194,13 @@ class _PostFromOpenSeaInstagram:
 
 
 class ManageFlowObj:
-    def __init__(self, instagram_values_file, instagram_user_access_token_file, instagram_email_credentials_file,
+    def __init__(self, instagram_values_file, instagram_user_access_token_file, facebook_credentials_file,
                  tx_hash_db_name):
-        self.start_time = time.time()
-        self.email_credentials_file = instagram_email_credentials_file
         self.__base_obj = _PostFromOpenSeaInstagram(instagram_values_file, instagram_user_access_token_file,
                                                     tx_hash_db_name)
-        self._begin()
+        self.gen_long_lived_token_class = self.GenerateLongLivedToken(facebook_credentials_file)
+        self.gen_long_lived_token_class.generate()
+        self.begin()
 
     def run_methods(self, date_time_now):
         self.check_os_api_status(date_time_now)
@@ -228,44 +236,148 @@ class ManageFlowObj:
     def try_to_post_to_instagram(self, date_time_now):
         posted_to_instagram = self.__base_obj.post_to_instagram()
         if posted_to_instagram:
-            print('Posted to Instagram roughly', date_time_now, flush=True)
+            print('Posted to Instagram at roughly', date_time_now, flush=True)
             time.sleep(60)
         else:
             print('Post to Instagram error at roughly', date_time_now, flush=True)
             time.sleep(120)
 
-    def send_email_to_refresh_access_token(self, date_time_now):
-        email_credentials_file = open(self.email_credentials_file, 'r')
-        username = email_credentials_file.readline().split(":")[1]
-        password = email_credentials_file.readline().split(":")[1]
-        to_email = email_credentials_file.readline().split(":")[1]
-        email_credentials_file.close()
-
-        smtp_server = "smtp.gmail.com"
-        smtp_port = 587
-        smtp_username = username
-        smtp_password = password
-
-        email_to = [to_email]
-        email_from = username
-        email_subject = "Refresh Exchange Token"
-        email_space = ", "
-        data = 'Refresh the token.'
-        msg = MIMEText(data)
-        msg['Subject'] = email_subject
-        msg['To'] = email_space.join(email_to)
-        msg['From'] = email_from
-        mail = smtplib.SMTP(smtp_server, smtp_port)
-        mail.starttls()
-        mail.login(smtp_username, smtp_password)
-        mail.sendmail(email_from, email_to, msg.as_string())
-        mail.quit()
-        print('Sent email to refresh token at roughly', date_time_now, flush=True)
-
-    def _begin(self):
+    def begin(self):
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            time_now = time.time()
-            if (time_now - self.start_time) >= 1728000:
-                self.send_email_to_refresh_access_token(date_time_now)
+            time_now = int(time.time())
+            if self.gen_long_lived_token_class.generated_time is not None:
+                time_elapsed_since_token_generated = time_now - self.gen_long_lived_token_class.generated_time
+                if time_elapsed_since_token_generated > 3600 * 24 * 50:  # 50 days
+                    generated = self.gen_long_lived_token_class.generate()
+                    if generated:
+                        print('Generated new long lived user access token at roughly', date_time_now, flush=True)
+                    else:
+                        print('Generating token failed. Email sent.', date_time_now, flush=True)
+
+    class GenerateLongLivedToken:
+        def __init__(self, token_file):
+            self.graph_explorer_url_redirect = 'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers' \
+                                               '.facebook.com%2Ftools%2Fexplorer%2F'
+            self.api_url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'
+            self.graph_explorer_url = 'https://developers.facebook.com/tools/explorer/'
+            self.fb_exchange_token = None
+            self.generated_time = None
+            self.email_field_xpath = '//*[@id="email"]'
+            self.pwd_field_xpath = '//*[@id="pass"]'
+            self.login_btn_xpath = '//*[@id="loginbutton"]'
+            self.gen_btn_xpath = '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[' \
+                                 '5]/div[5]/div/div/div/div/div/div[2]/div/button '
+            self.continue_btn_xpath = '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div[1]/div[2]'
+            self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
+                                  '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input '
+            tokens = open(token_file, 'r')
+            self.client_id = tokens.readline().strip()
+            self.client_secret = tokens.readline().strip()
+            self.token_file = tokens.readline().strip()
+            self.facebook_email = tokens.readline().strip()
+            self.facebook_password = tokens.readline().strip()
+            self.gmail_email = tokens.readline().strip()
+            self.gmail_password = tokens.readline().strip()
+            self.gmail_to_email = tokens.readline().strip()
+            tokens.close()
+
+        def generate(self):
+            try:
+                self.generate_short_lived_user_access_token()
+                token = self.get_long_lived_user_access_token()
+                self.replace_old_token_with_new(token)
+                self.generated_time = int(time.time())
+                return True
+            except Exception as e:
+                print(e, flush=True)
+                self.send_email_to_manually_change_user_token()
+                return False
+
+        def generate_short_lived_user_access_token(self):
+            options = webdriver.ChromeOptions()
+            options.add_argument('--no-sandbox')
+            options.add_argument("--kiosk")
+            options.headless = True
+            options.add_argument('--disable-dev-shm-usage')
+            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+            driver.get(
+                'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers.facebook.com%2Ftools%2Fexplorer%2F')
+            email_field = driver.find_element_by_xpath('//*[@id="email"]')
+            email_field.send_keys(self.facebook_email)
+            password_field = driver.find_element_by_xpath('//*[@id="pass"]')
+            password_field.send_keys(self.facebook_password)
+            login_button = driver.find_element_by_xpath('//*[@id="loginbutton"]')
+            login_button.click()
+            time.sleep(3)
+            driver.get('https://developers.facebook.com/tools/explorer/')
+            gen_short_lived_access_token_button = driver.find_element_by_xpath(
+                '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div['
+                '5]/div/div/div/div/div/div[2]/div/button')
+            gen_short_lived_access_token_button.click()
+            window_before = driver.window_handles[0]
+            window_after = driver.window_handles[1]
+            driver.switch_to.window(window_after)
+            driver.maximize_window()
+            continue_button = driver.find_element_by_xpath(
+                '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div['
+                '1]/div[2]')
+            continue_button.click()
+            driver.implicitly_wait(3)
+            close_again_flag = True
+            try:
+                short_lived_access_token = driver.find_element_by_xpath(
+                    '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div['
+                    '2]/div/div[5]/div[5]/div/div/div/div/div/div['
+                    '2]/div/div/div[1]/label/input').get_attribute('value')
+            except Exception:
+                driver.switch_to.window(window_before)
+                short_lived_access_token = driver.find_element_by_xpath(
+                    '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div['
+                    '2]/div/div[5]/div[5]/div/div/div/div/div/div['
+                    '2]/div/div/div[1]/label/input').get_attribute('value')
+                close_again_flag = False
+            driver.close()
+            if close_again_flag:
+                driver.switch_to.window(window_before)
+                driver.close()
+            self.fb_exchange_token = short_lived_access_token
+
+        def get_long_lived_user_access_token(self):
+            querystring = {"client_id": self.client_id,
+                           "client_secret": self.client_secret,
+                           "fb_exchange_token": self.fb_exchange_token}
+
+            headers = {"Accept": "application/json"}
+            response = requests.request("GET", self.api_url, headers=headers, params=querystring)
+            long_lived_access_token = response.json()['access_token']
+            return long_lived_access_token
+
+        def replace_old_token_with_new(self, token):
+            if os.path.exists(self.token_file):
+                os.remove(self.token_file)
+            token_file = open(self.token_file, 'w')
+            token_file.write(token)
+            token_file.close()
+
+        def send_email_to_manually_change_user_token(self):
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 587
+            smtp_username = self.gmail_email
+            smtp_password = self.gmail_password
+
+            email_to = [self.gmail_to_email]
+            email_from = self.gmail_email
+            email_subject = "Refresh Exchange Token"
+            email_space = ", "
+            data = 'Refresh the long user token.'
+            msg = MIMEText(data)
+            msg['Subject'] = email_subject
+            msg['To'] = email_space.join(email_to)
+            msg['From'] = email_from
+            mail = smtplib.SMTP(smtp_server, smtp_port)
+            mail.starttls()
+            mail.login(smtp_username, smtp_password)
+            mail.sendmail(email_from, email_to, msg.as_string())
+            mail.quit()
