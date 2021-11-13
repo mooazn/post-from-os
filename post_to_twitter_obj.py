@@ -1,4 +1,5 @@
 import datetime
+from operator import itemgetter
 import requests
 import time
 import twython.exceptions
@@ -87,6 +88,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             rarity_decimal = float(trait_count / self.total_supply)
             if rarity_decimal <= 0.05:
                 rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
+        rare_trait_list.sort(key=itemgetter(2))
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
