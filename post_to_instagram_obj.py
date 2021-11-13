@@ -2,7 +2,6 @@ import base64
 import datetime
 from email.mime.text import MIMEText
 import os
-import pyperclip
 import requests
 import selenium.common.exceptions
 from selenium import webdriver
@@ -198,8 +197,9 @@ class ManageFlowObj:
                  tx_hash_db_name):
         self.__base_obj = _PostFromOpenSeaInstagram(instagram_values_file, instagram_user_access_token_file,
                                                     tx_hash_db_name)
-        self.gen_long_lived_token_class = self.GenerateLongLivedToken(facebook_credentials_file)
+        self.gen_long_lived_token_class = GenerateLongLivedToken(facebook_credentials_file)
         self.gen_long_lived_token_class.generate()
+        print('Generated token for first time!', flush=True)
         self.begin()
 
     def run_methods(self, date_time_now):
@@ -256,128 +256,121 @@ class ManageFlowObj:
                     else:
                         print('Generating token failed. Email sent.', date_time_now, flush=True)
 
-    class GenerateLongLivedToken:
-        def __init__(self, token_file):
-            self.graph_explorer_url_redirect = 'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers' \
-                                               '.facebook.com%2Ftools%2Fexplorer%2F'
-            self.api_url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'
-            self.graph_explorer_url = 'https://developers.facebook.com/tools/explorer/'
-            self.fb_exchange_token = None
-            self.generated_time = None
-            self.email_field_xpath = '//*[@id="email"]'
-            self.pwd_field_xpath = '//*[@id="pass"]'
-            self.login_btn_xpath = '//*[@id="loginbutton"]'
-            self.gen_btn_xpath = '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[' \
-                                 '5]/div[5]/div/div/div/div/div/div[2]/div/button '
-            self.continue_btn_xpath = '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div[1]/div[2]'
-            self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
-                                  '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input '
-            tokens = open(token_file, 'r')
-            self.client_id = tokens.readline().strip()
-            self.client_secret = tokens.readline().strip()
-            self.token_file = tokens.readline().strip()
-            self.facebook_email = tokens.readline().strip()
-            self.facebook_password = tokens.readline().strip()
-            self.gmail_email = tokens.readline().strip()
-            self.gmail_password = tokens.readline().strip()
-            self.gmail_to_email = tokens.readline().strip()
-            tokens.close()
 
-        def generate(self):
-            try:
-                self.generate_short_lived_user_access_token()
-                token = self.get_long_lived_user_access_token()
-                self.replace_old_token_with_new(token)
-                self.generated_time = int(time.time())
-                return True
-            except Exception as e:
-                print(e, flush=True)
-                self.send_email_to_manually_change_user_token()
-                return False
+class GenerateLongLivedToken:
+    def __init__(self, token_file):
+        self.driver = None
+        self.graph_explorer_url_redirect = 'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers' \
+                                           '.facebook.com%2Ftools%2Fexplorer%2F'
+        self.api_fb_exchange_token = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'
+        self.graph_explorer_url = 'https://developers.facebook.com/tools/explorer/'
+        self.fb_exchange_token = None
+        self.generated_time = None
+        self.email_field_xpath = '//*[@id="email"]'
+        self.pwd_field_xpath = '//*[@id="pass"]'
+        self.login_btn_xpath = '//*[@id="loginbutton"]'
+        self.gen_btn_xpath = '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[' \
+                             '5]/div[5]/div/div/div/div/div/div[2]/div/button '
+        self.continue_btn_xpath = '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div[1]/div[2]'
+        self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
+                              '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input'
+        tokens = open(token_file, 'r')
+        self.client_id = tokens.readline().strip()
+        self.client_secret = tokens.readline().strip()
+        self.token_file = tokens.readline().strip()
+        self.facebook_email = tokens.readline().strip()
+        self.facebook_password = tokens.readline().strip()
+        self.gmail_email = tokens.readline().strip()
+        self.gmail_password = tokens.readline().strip()
+        self.gmail_to_email = tokens.readline().strip()
+        tokens.close()
 
-        def generate_short_lived_user_access_token(self):
-            options = webdriver.ChromeOptions()
-            options.add_argument('--no-sandbox')
-            options.add_argument("--kiosk")
-            options.headless = True
-            options.add_argument('--disable-dev-shm-usage')
-            driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-            driver.get(
-                'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers.facebook.com%2Ftools%2Fexplorer%2F')
-            email_field = driver.find_element_by_xpath('//*[@id="email"]')
-            email_field.send_keys(self.facebook_email)
-            password_field = driver.find_element_by_xpath('//*[@id="pass"]')
-            password_field.send_keys(self.facebook_password)
-            login_button = driver.find_element_by_xpath('//*[@id="loginbutton"]')
-            login_button.click()
-            time.sleep(3)
-            driver.get('https://developers.facebook.com/tools/explorer/')
-            gen_short_lived_access_token_button = driver.find_element_by_xpath(
-                '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div['
-                '5]/div/div/div/div/div/div[2]/div/button')
-            gen_short_lived_access_token_button.click()
-            window_before = driver.window_handles[0]
-            window_after = driver.window_handles[1]
-            driver.switch_to.window(window_after)
-            driver.maximize_window()
-            continue_button = driver.find_element_by_xpath(
-                '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div['
-                '1]/div[2]')
-            continue_button.click()
-            driver.implicitly_wait(3)
-            close_again_flag = True
-            try:
-                short_lived_access_token = driver.find_element_by_xpath(
-                    '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div['
-                    '2]/div/div[5]/div[5]/div/div/div/div/div/div['
-                    '2]/div/div/div[1]/label/input').get_attribute('value')
-            except Exception:
-                driver.switch_to.window(window_before)
-                short_lived_access_token = driver.find_element_by_xpath(
-                    '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div['
-                    '2]/div/div[5]/div[5]/div/div/div/div/div/div['
-                    '2]/div/div/div[1]/label/input').get_attribute('value')
-                close_again_flag = False
-            driver.close()
-            if close_again_flag:
-                driver.switch_to.window(window_before)
-                driver.close()
-            self.fb_exchange_token = short_lived_access_token
+    def generate(self):
+        try:
+            self.generate_short_lived_user_access_token()
+            token = self.get_long_lived_user_access_token()
+            self.replace_old_token_with_new(token)
+            self.generated_time = int(time.time())
+            return True
+        except Exception as e:
+            print(e, flush=True)
+            self.driver.quit()
+            self.send_email_to_manually_change_user_token()
+            return False
 
-        def get_long_lived_user_access_token(self):
-            querystring = {"client_id": self.client_id,
-                           "client_secret": self.client_secret,
-                           "fb_exchange_token": self.fb_exchange_token}
+    def generate_short_lived_user_access_token(self):
+        options = webdriver.ChromeOptions()
+        options.add_argument('--no-sandbox')
+        options.add_argument("--kiosk")
+        options.headless = True
+        options.add_argument('--disable-dev-shm-usage')
+        self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+        self.driver.get(self.graph_explorer_url_redirect)
+        email_field = self.driver.find_element_by_xpath(self.email_field_xpath)
+        email_field.send_keys(self.facebook_email)
+        password_field = self.driver.find_element_by_xpath(self.pwd_field_xpath)
+        password_field.send_keys(self.facebook_password)
+        login_button = self.driver.find_element_by_xpath(self.login_btn_xpath)
+        login_button.click()
+        time.sleep(3)
+        self.driver.get(self.graph_explorer_url)
+        gen_short_lived_access_token_button = self.driver.find_element_by_xpath(self.gen_btn_xpath)
+        gen_short_lived_access_token_button.click()
+        window_before = self.driver.window_handles[0]
+        window_after = self.driver.window_handles[1]
+        self.driver.switch_to.window(window_after)
+        self.driver.maximize_window()
+        continue_button = self.driver.find_element_by_xpath(self.continue_btn_xpath)
+        continue_button.click()
+        self.driver.implicitly_wait(3)
+        close_again_flag = True
+        try:
+            short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
+        except selenium.common.exceptions.NoSuchWindowException:
+            self.driver.switch_to.window(window_before)
+            short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
+            close_again_flag = False
+        self.driver.close()
+        if close_again_flag:
+            self.driver.switch_to.window(window_before)
+            self.driver.close()
+        self.driver.quit()
+        self.fb_exchange_token = short_lived_access_token
 
-            headers = {"Accept": "application/json"}
-            response = requests.request("GET", self.api_url, headers=headers, params=querystring)
-            long_lived_access_token = response.json()['access_token']
-            return long_lived_access_token
+    def get_long_lived_user_access_token(self):
+        querystring = {"client_id": self.client_id,
+                       "client_secret": self.client_secret,
+                       "fb_exchange_token": self.fb_exchange_token}
 
-        def replace_old_token_with_new(self, token):
-            if os.path.exists(self.token_file):
-                os.remove(self.token_file)
-            token_file = open(self.token_file, 'w')
-            token_file.write(token)
-            token_file.close()
+        headers = {"Accept": "application/json"}
+        response = requests.request("GET", self.api_fb_exchange_token, headers=headers, params=querystring)
+        long_lived_access_token = response.json()['access_token']
+        return long_lived_access_token
 
-        def send_email_to_manually_change_user_token(self):
-            smtp_server = "smtp.gmail.com"
-            smtp_port = 587
-            smtp_username = self.gmail_email
-            smtp_password = self.gmail_password
+    def replace_old_token_with_new(self, token):
+        if os.path.exists(self.token_file):
+            os.remove(self.token_file)
+        token_file = open(self.token_file, 'w')
+        token_file.write(token)
+        token_file.close()
 
-            email_to = [self.gmail_to_email]
-            email_from = self.gmail_email
-            email_subject = "Refresh Exchange Token"
-            email_space = ", "
-            data = 'Refresh the long user token.'
-            msg = MIMEText(data)
-            msg['Subject'] = email_subject
-            msg['To'] = email_space.join(email_to)
-            msg['From'] = email_from
-            mail = smtplib.SMTP(smtp_server, smtp_port)
-            mail.starttls()
-            mail.login(smtp_username, smtp_password)
-            mail.sendmail(email_from, email_to, msg.as_string())
-            mail.quit()
+    def send_email_to_manually_change_user_token(self):
+        smtp_server = "smtp.gmail.com"
+        smtp_port = 587
+        smtp_username = self.gmail_email
+        smtp_password = self.gmail_password
+
+        email_to = [self.gmail_to_email]
+        email_from = self.gmail_email
+        email_subject = "Refresh Exchange Token"
+        email_space = ", "
+        data = 'Refresh the long user token.'
+        msg = MIMEText(data)
+        msg['Subject'] = email_subject
+        msg['To'] = email_space.join(email_to)
+        msg['From'] = email_from
+        mail = smtplib.SMTP(smtp_server, smtp_port)
+        mail.starttls()
+        mail.login(smtp_username, smtp_password)
+        mail.sendmail(email_from, email_to, msg.as_string())
+        mail.quit()
