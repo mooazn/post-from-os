@@ -10,6 +10,9 @@ import time
 from tinydb import TinyDB, Query
 from webdriver_manager.chrome import ChromeDriverManager
 
+# TODO:
+#  I need to find a way to limit posts per day to 25 only.
+
 
 class _OpenSeaTransactionObjectInstagram:
     insta_caption = None
@@ -236,10 +239,10 @@ class ManageFlowObj:
     def try_to_post_to_instagram(self, date_time_now):
         posted_to_instagram = self.__base_obj.post_to_instagram()
         if posted_to_instagram:
-            print('Posted to Instagram at roughly', date_time_now, flush=True)
+            print('Posted to InstagramCode at roughly', date_time_now, flush=True)
             time.sleep(60)
         else:
-            print('Post to Instagram error at roughly', date_time_now, flush=True)
+            print('Post to InstagramCode error at roughly', date_time_now, flush=True)
             time.sleep(120)
 
     def begin(self):
