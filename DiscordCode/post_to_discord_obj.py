@@ -1,5 +1,6 @@
 import datetime
 import discord
+from discord.embeds import EmptyEmbed
 from enum import Enum
 import requests
 import time
@@ -15,10 +16,9 @@ class EventOrTransaction(Enum):
 
 class _OpenSeaTransactionObject:
     discord_embed = None
-    discord_message = None
 
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_, the_date_,
-                 the_time_, link_, listing_id_, tx_type_, image_thumbnail_url_, embed_icon_url_):
+                 the_time_, link_, listing_id_, tx_type_, image_thumbnail_url_, embed_icon_url_, rgb_color_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -34,32 +34,53 @@ class _OpenSeaTransactionObject:
         self.tx_type = tx_type_
         self.image_thumbnail_url = image_thumbnail_url_
         self.embed_icon_url = embed_icon_url_
+        rgb = rgb_color_
+        rgb_values = rgb.split()
+        self.r = int(rgb_values[0])
+        self.g = int(rgb_values[1])
+        self.b = int(rgb_values[2])
 
     def create_discord_embed(self):
+        icon_url = EmptyEmbed
+        if str(self.embed_icon_url).endswith('.png') or str(self.embed_icon_url).endswith('jpeg') or \
+                str(self.embed_icon_url).endswith('jpg'):
+            icon_url = str(self.embed_icon_url)
+        embed_color = discord.Color.default()
+        if 0 <= self.r <= 255 and 0 <= self.g <= 255 and 0 <= self.b <= 255:
+            embed_color = discord.Color.from_rgb(self.r, self.g, self.b)
         embed = None
         if self.tx_type == EventOrTransaction.SALE.value:
             embed = discord.Embed(title=self.name, url=self.link,
                                   description='Ξ{} (${})'.format(self.eth_nft_price, self.total_usd_cost) + '\n\n' +
                                               'Seller: {}\nBuyer: {}'.format(self.seller, self.buyer),
-                                  color=discord.Color.red())
-            embed.set_author(name="New Purchase!", icon_url=self.embed_icon_url)
+                                  color=embed_color)
+            embed.set_author(name="New Purchase!", icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventOrTransaction.LISTING.value:
             embed = discord.Embed(title=self.name, url=self.link, description='Ξ{} (${})'.format(
                 self.eth_nft_price, self.total_usd_cost) + '\n\n' + 'Seller: {}'.format(self.seller),
-                                  color=discord.Color.red())
-            embed.set_author(name="New Listing!", icon_url=self.embed_icon_url)
+                                  color=embed_color)
+            embed.set_author(name="New Listing!", icon_url=icon_url)
             embed.set_image(url=self.image_thumbnail_url)
         self.discord_embed = embed
+
+
+class _OpenSeaAssetObject:
+    discord_embed = None
+
+    def __init__(self):
+        pass
 
 
 class _PostFromOpenSeaDiscord:
     def __init__(self, db_name, values_file):
         discord_values = open(values_file, 'r')
-        self.contract_address = discord_values.readline().split(':')[1].strip()
+        self.contract_address = discord_values.readline().strip()
         self.embed_icon_url = discord_values.readline().strip()
+        self.embed_rgb_color = discord_values.readline().strip()
         discord_values.close()
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
+        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.response = None
         self.os_obj_to_post = None
         self.tx_type = None
@@ -143,7 +164,7 @@ class _PostFromOpenSeaDiscord:
                 self.tx_db.insert({'tx': tx_hash})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, usd_price,
                                                         total_usd_cost, the_date, the_time, link, None, self.tx_type,
-                                                        image_thumbnail_url, self.embed_icon_url)
+                                                        image_thumbnail_url, self.embed_icon_url, self.embed_rgb_color)
             elif self.tx_type == EventOrTransaction.LISTING.value:
                 listing_id = str(base['id'])
                 listing_exists = False if len(
@@ -158,7 +179,7 @@ class _PostFromOpenSeaDiscord:
                 self.tx_db.insert({'id': listing_id})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, usd_price,
                                                         total_usd_cost, None, None, link, listing_id, self.tx_type,
-                                                        image_thumbnail_url, self.embed_icon_url)
+                                                        image_thumbnail_url, self.embed_icon_url, self.embed_rgb_color)
             transaction.create_discord_embed()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -176,12 +197,19 @@ class _PostFromOpenSeaDiscord:
         self.os_obj_to_post = self.tx_queue[0]
         return True
 
+    def get_asset(self, token_id):
+        asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+        asset_response = requests.request("GET", asset_url)
+
 
 class ManageFlowObj:
-    def __init__(self, db_name, values_file):
-        self.base_obj = _PostFromOpenSeaDiscord(db_name, values_file)
+    def __init__(self):
+        self.base_obj = None
         self.tx_type = None
         self.date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
+
+    def create(self, db_name, values_file):
+        self.base_obj = _PostFromOpenSeaDiscord(db_name, values_file)
 
     def check_os_api_status(self, tx_type):
         self.date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
@@ -202,12 +230,14 @@ class ManageFlowObj:
             return True
 
 
-async def try_to_post_to_discord(mfo, channel):
+async def try_to_post_embed_to_discord(mfo, channel):
     try:
         await channel.send(embed=mfo.base_obj.os_obj_to_post.discord_embed)
         mfo.base_obj.os_obj_to_post.is_posted = True
         print('Posted to Discord at roughly', mfo.date_time_now, flush=True)
         return True
+    except AttributeError:
+        raise Exception('Channel does not exist OR I am not authorized to send messages in this channel.')
     except Exception as e:
         print(e, flush=True)
         print('Post to Discord error at roughly', mfo.date_time_now, flush=True)
