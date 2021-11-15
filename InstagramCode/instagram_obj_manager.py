@@ -1,28 +1,35 @@
 from post_to_instagram_obj import ManageFlowObj
 
 
-mfo = ManageFlowObj('InstagramCode Values.txt', 'InstagramCode User Access Token.txt', 'InstagramCode Email Credentials.txt', 'DB Name.json')
+ex = ManageFlowObj('Instagram Values.txt', 'Instagram User Access Token.txt',
+                   'Instagram User Token Values.txt', 'TX Hash DB Name.json')
 
 
-# The InstagramCode Values file (txt) must be like shown below:
+# The Instagram Values .txt file must be like shown below:
 
-# file_name:[put the name of the .jpeg file (with the extension) you want]
-# img_bb_key:[the imgbb key. more info: https://api.imgbb.com/]
-# insta_tags:[put normal hashtags here separated by a space. i.e. #crypto #nfts ...]
-# page_id:[the page id of the instagram page found on Facebook]
-# contract_address:[contract address here. can be found on the project's Ether scan or just in the link of an asset]
+# put the name of the .jpeg file (with the extension) you want
+# the imgbb key. more info: https://api.imgbb.com/
+# put normal hashtags here separated by a space. i.e. #crypto #nfts ...
+# the page id of the instagram page found on Facebook
+# contract address here. can be found on the project's Ether scan or just in the link of an asset
 
-# The InstagramCode User Access Token file (txt) must be like shown below:
+# The Instagram User Access Token .txt file must be like shown below:
 
-# [user access token here]
+# user access token here
 
-# The InstagramCode Email Credentials file (txt) must be like shown below:
-# username:[your email]
-# password:[your email's password]
-# toemail:[email that you want to send the email to (could send to yourself!)]
+# The Instagram User Token Values .txt file must be like shown below:
+# facebook client id
+# facebook client secret
+# token file (where the User Access Token exists, should be same as Instagram User Access Token .txt)
+# facebook email
+# facebook password
+# gmail email (remember to allow less secure apps)
+# gmail password
+# gmail to_email (who are you sending it to)
 
 # The last provided string (DB Name) is the .json file name for the TinyDB. The DB used to make sure each post is unique
 # and is also helpful in case you have to restart the program (duplicates will not be posted).
 
 # for example:
-# mfo = ManageFlowObj('instagram_values_sirens.txt', 'instagram_user_access_token.txt', 'instagram_email_credentials.txt', 'sirens_tx_hash_db_insta.json')
+mfo = ManageFlowObj('instagram_values_sirens.txt', 'instagram_user_access_token.txt',
+                    'instagram_generate_user_token_values.txt', 'sirens_tx_hash_db_insta.json')

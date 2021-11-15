@@ -12,6 +12,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 # TODO:
 #  I need to find a way to limit posts per day to 25 only.
+#  25 is the maximum number of posts you can do per day with the API.
 
 
 class _OpenSeaTransactionObjectInstagram:
@@ -46,11 +47,11 @@ class _PostFromOpenSeaInstagram:
         self.instagram_access_token_file = access_token_file
         tx_hash_db = db_name
         self.values = open(instagram_values_file, 'r')
-        self.file_name = self.values.readline().split(":")[1].strip()
-        self.img_bb_key = self.values.readline().split(":")[1].strip()
-        self.insta_tags = self.values.readline().split(":")[1]
-        self.page_id = self.values.readline().split(":")[1].strip()
-        self.contract_address = self.values.readline().split(":")[1].strip()
+        self.file_name = self.values.readline().strip()
+        self.img_bb_key = self.values.readline().strip()
+        self.insta_tags = self.values.readline()
+        self.page_id = self.values.readline().strip()
+        self.contract_address = self.values.readline().strip()
         self.values.close()
         self.os_url = "https://api.opensea.io/api/v1/events"
         self.insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
@@ -239,10 +240,10 @@ class ManageFlowObj:
     def try_to_post_to_instagram(self, date_time_now):
         posted_to_instagram = self.__base_obj.post_to_instagram()
         if posted_to_instagram:
-            print('Posted to InstagramCode at roughly', date_time_now, flush=True)
+            print('Posted to Instagram at roughly', date_time_now, flush=True)
             time.sleep(60)
         else:
-            print('Post to InstagramCode error at roughly', date_time_now, flush=True)
+            print('Post to Instagram error at roughly', date_time_now, flush=True)
             time.sleep(120)
 
     def begin(self):

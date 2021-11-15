@@ -169,7 +169,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
                                                     total_usd_cost, the_date, the_time, link, rare_trait_list,
                                                     self.twitter_tags)
-            print(transaction.twitter_caption)
+            transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
 
