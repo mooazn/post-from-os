@@ -189,7 +189,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
 
     def post_to_reddit(self):
         try:
-            sub_id = self.reddit.subreddit('r/u_{}'.format(self.username)).submit_image("Test Submission",
+            sub_id = self.reddit.subreddit('r/u_{}'.format(self.username)).submit_image(self.os_obj_to_post.name,
                                                                                         image_path=self.file_name).id
             self.reddit.submission(id=sub_id).reply(self.os_obj_to_post.reddit_caption)
             return True
@@ -207,9 +207,9 @@ class ManageFlowObj:  # Main class which does all of the operations
         cont_address = collection_stats[0]
         supply = collection_stats[1]
         print('All files are validated. Beginning program...')
-        # self.__base_obj = _PostFromOpenSeaReddit(cont_address, supply, self.reddit_values_file, self.tx_hash_db_name,
-        #                                           self.trait_db_name)
-        # self._begin()
+        self.__base_obj = _PostFromOpenSeaReddit(cont_address, supply, self.reddit_values_file, self.tx_hash_db_name,
+                                                 self.trait_db_name)
+        self._begin()
 
     def validate_params(self):
         values_file_test = open(self.reddit_values_file, 'r')
