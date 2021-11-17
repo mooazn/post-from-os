@@ -1,13 +1,20 @@
 import os
 
+# this method finds a specified file (if it exists) in the parent directory of the current directory.
+# Basically, it only goes one level up and attempts to find the file.
 
-def find_file(file_to_find):
+
+def find(file_to_find):
+    home_dir = os.getcwd()
     if not file_to_find or len(file_to_find) == 0:
-        return []
+        return None
+    if os.path.exists(file_to_find):
+        return file_to_find
     os.chdir('..')
     if os.path.exists(file_to_find):
-        return [os.getcwd() + '/' + file_to_find]
-    directories = [[os.getcwd() + '/' + name, False] for name in os.listdir(".") if os.path.isdir(name)]
+        os.chdir(home_dir)
+        return os.getcwd() + '/' + file_to_find
+    directories = [[os.getcwd() + '/' + name, False] for name in os.listdir('.') if os.path.isdir(name)]
     files = []
     while True:
         all_visited = True
@@ -26,4 +33,10 @@ def find_file(file_to_find):
                 if os.path.isdir(cur_path):
                     directories.append([cur_path, False])
             directory[1] = True
-    return list(set(files))
+    result = list(set(files))
+    if len(result) > 1:
+        print('More than 1 file returned. Narrow down your search. Files returned:', result)
+        os.chdir(home_dir)
+        return None
+    os.chdir(home_dir)
+    return result[0]

@@ -1,5 +1,5 @@
 import datetime
-from HelperCode import traverse_dir
+from HelperCode import find_file
 from operator import itemgetter
 import prawcore.exceptions
 import requests
@@ -27,14 +27,14 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.rare_trait_list = rare_trait_list_
 
     def create_reddit_caption(self):
-        self.reddit_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
+        self.reddit_caption = '{} bought for Ξ{} (${})\n\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
         if self.rare_trait_list is not None:
-            self.reddit_caption += 'Rare Traits:\n'
+            self.reddit_caption += 'Rare Traits:\n\n'
             full_rare_trait_sentence = ''
             for rare_trait in self.rare_trait_list:
-                full_rare_trait_sentence += '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
+                full_rare_trait_sentence += '{}: {} - {}%\n\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
             self.reddit_caption += full_rare_trait_sentence
-        self.reddit_caption += '\n\n' + self.link
+        self.reddit_caption += '\n\n Link: ' + str(self.link).replace('https://', '')
 
 
 class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes both OpenSea API and Reddit API
@@ -192,6 +192,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             sub_id = self.reddit.subreddit('r/u_{}'.format(self.username)).submit_image(self.os_obj_to_post.name,
                                                                                         image_path=self.file_name).id
             self.reddit.submission(id=sub_id).reply(self.os_obj_to_post.reddit_caption)
+            self.os_obj_to_post.is_posted = True
             return True
         except Exception as e:
             print(e, flush=True)
@@ -206,6 +207,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
+        self.trait_db_name = trait_db_name if collection_stats[2] is None else collection_stats[2]
         print('All files are validated. Beginning program...')
         self.__base_obj = _PostFromOpenSeaReddit(cont_address, supply, self.reddit_values_file, self.tx_hash_db_name,
                                                  self.trait_db_name)
@@ -248,15 +250,15 @@ class ManageFlowObj:  # Main class which does all of the operations
         if not str(self.tx_hash_db_name).lower().endswith('.json'):
             raise Exception('Transaction Hash DB must end with a .json file extension.')
         print('Validation of TX Hash DB Name .json complete. No errors found...')
+        trait_db_full_name = None
         if self.trait_db_name is not None:
             if not str(self.trait_db_name).lower().endswith('.json'):
                 raise Exception('Trait DB must end with a .json file extension.')
-            if trait_db_file := traverse_dir.find_file(self.trait_db_name):
-                print(trait_db_file)
+            trait_db_full_name = find_file.find(self.trait_db_name)
             print('Validation of Trait DB Name .json complete. No errors found...')
         else:
             print('Skipping Trait DB Name .json. No file was provided.')
-        return [contract_address, total_supply]
+        return [contract_address, total_supply, trait_db_full_name]
 
     def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)
