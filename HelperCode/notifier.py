@@ -1,17 +1,30 @@
-import requests
 import os
+import time
+from tinydb import TinyDB, Query
 
-# the focus of this file is to run the scripts in case they die :)
 
-os.system('python3 test.py')
+TMUX_BANANAS_NAME = 'bananatwit'
+TMUX_SIRENS_NAME = 'sirentwit'
+TMUX_HUMANOIDS_NAME = 'humanoidtwit'
+BANANAS_FILE = 'post_bananas_twitter.py'
+SIRENS_FILE = 'post_sirens_twitter.py'
+HUMANOIDS_FILE = 'post_humanoids_twitter.py'
+count_db = TinyDB('../TwitterCode/count.json')
+count_query = Query()
+occurred = False
+prev_len = 0
 
-# while True:
-#     url = "https://api.opensea.io/api/v1/events?asset_contract_address=0x3a5051566b2241285be871f650c445a88a970edd" \
-#           "&event_type=successful&only_opensea=false&offset=0&limit=300 "
-#
-#     headers = {"Accept": "application/json"}
-#
-#     response = requests.request("GET", url, headers=headers)
-#
-#     print(response.text)
 
+def re_run_banana():
+    os.system('tmux send-keys -t {} "python3 {}" enter'.format(TMUX_BANANAS_NAME, BANANAS_FILE))
+    time.sleep(15)
+    os.system('pkill -f {}'.format(BANANAS_FILE))
+
+
+while True:
+    time.sleep(35)
+    if prev_len == len(count_db):
+        if occurred:  # check twice to make sure
+            re_run_banana()
+        occurred = True
+    prev_len = len(count_db)
