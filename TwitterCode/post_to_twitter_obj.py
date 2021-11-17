@@ -6,6 +6,8 @@ import twython.exceptions
 from tinydb import TinyDB, Query
 from twython import Twython
 
+from HelperCode import find_file
+
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     twitter_caption = None
@@ -170,6 +172,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                                                     total_usd_cost, the_date, the_time, link, rare_trait_list,
                                                     self.twitter_tags)
             transaction.create_twitter_caption()
+            print(transaction.twitter_caption)
             self.tx_queue.append(transaction)
         return self.process_queue()
 
@@ -226,6 +229,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
+        self.trait_db_name = trait_db_name if collection_stats[2] is None else collection_stats[2]
         print('All files are validated. Beginning program...')
         self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file, self.tx_hash_db_name,
                                                   self.trait_db_name)
@@ -283,13 +287,15 @@ class ManageFlowObj:  # Main class which does all of the operations
         if not str(self.tx_hash_db_name).lower().endswith('.json'):
             raise Exception('Transaction Hash DB must end with a .json file extension.')
         print('Validation of TX Hash DB Name .json complete. No errors found...')
+        trait_db_full_name = None
         if self.trait_db_name is not None:
             if not str(self.trait_db_name).lower().endswith('.json'):
                 raise Exception('Trait DB must end with a .json file extension.')
+            trait_db_full_name = find_file.find(self.trait_db_name)
             print('Validation of Trait DB Name .json complete. No errors found...')
         else:
             print('Skipping Trait DB Name .json. No file was provided.')
-        return [contract_address, total_supply]
+        return [contract_address, total_supply, trait_db_full_name]
 
     def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)

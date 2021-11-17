@@ -39,4 +39,4 @@ def find(file_to_find):
         os.chdir(home_dir)
         return None
     os.chdir(home_dir)
-    return result[0]
+    return None if len(result) == 0 else result[0]
