@@ -16,9 +16,9 @@ prev_len = 0
 
 
 def re_run_banana():
-    os.system('tmux send-keys -t {} "python3 {}" enter'.format(TMUX_BANANAS_NAME, BANANAS_FILE))
-    time.sleep(15)
     os.system('pkill -f {}'.format(BANANAS_FILE))
+    time.sleep(5)
+    os.system('tmux send-keys -t {} "python3 {}" enter'.format(TMUX_BANANAS_NAME, BANANAS_FILE))
 
 
 while True:
@@ -26,5 +26,7 @@ while True:
     if prev_len == len(count_db):
         if occurred:  # check twice to make sure
             re_run_banana()
+            occurred = False
+            continue
         occurred = True
     prev_len = len(count_db)
