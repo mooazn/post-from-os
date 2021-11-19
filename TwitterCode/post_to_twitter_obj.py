@@ -3,26 +3,24 @@ from operator import itemgetter
 import requests
 import time
 import twython.exceptions
+from requests.structures import CaseInsensitiveDict
 from tinydb import TinyDB, Query
 from twython import Twython
+from fake_useragent import UserAgent
 
-from HelperCode import find_file
+
+# from HelperCode import find_file
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     twitter_caption = None
 
-    def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_, the_date_,
-                 the_time_, link_, rare_trait_list_, twitter_tags_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_,
+                 twitter_tags_):
         self.name = name_
         self.image_url = image_url_
-        self.seller = seller_
-        self.buyer = buyer_
         self.eth_nft_price = eth_nft_price_
-        self.usd_price = usd_price_
         self.total_usd_cost = total_usd_cost_
-        self.the_date = the_date_
-        self.the_time = the_time_
         self.link = link_
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
@@ -32,7 +30,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
         # the remaining characters at this stage should roughly be 130-180 characters.
-        if self.rare_trait_list is not None:
+        if self.rare_trait_list:
             if remaining_characters >= 13 and len(self.rare_trait_list) != 0:  # 13... why not
                 self.twitter_caption += 'Rare Traits:\n'
                 full_rare_trait_sentence = ''
@@ -53,16 +51,19 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         values = open(twitter_values_file, 'r')
         self.twitter_tags = values.readline().strip()
         self.collection_name = values.readline().strip()
-        api_key = values.readline().strip()
-        api_key_secret = values.readline().strip()
-        access_token = values.readline().strip()
-        access_token_secret = values.readline().strip()
+        twitter_api_key = values.readline().strip()
+        twitter_api_key_secret = values.readline().strip()
+        twitter_access_token = values.readline().strip()
+        twitter_access_token_secret = values.readline().strip()
+        self.os_api_key = values.readline().strip()
+        self.ether_scan_api_key = values.readline().strip()
         values.close()
-        self.file_name = self.collection_name + '.jpeg'
+        self.file_name = self.collection_name + '_twitter.jpeg'
         self.contract_address = address
         self.total_supply = supply
-        self.os_events_url = 'https://api.opensea.io/api/v1/events'
+        self.os_events_url = 'https://api.opensea.io/api/v1/events/'
         self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
+        self.ether_scan_api_url = 'https://api.etherscan.io/api'
         self.response = None
         self.os_obj_to_post = None
         self.driver = None
@@ -73,16 +74,29 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.tx_queue = []
         self.limit = 10
         self.twitter = Twython(
-            api_key,
-            api_key_secret,
-            access_token,
-            access_token_secret
+            twitter_api_key,
+            twitter_api_key_secret,
+            twitter_access_token,
+            twitter_access_token_secret
         )
+        self.ua = UserAgent()
 
     def __del__(self):
         self.twitter.client.close()
 
-    def create_rare_trait_list(self, traits, rare_trait_list):
+    def create_rare_trait_list(self, token_id):
+        asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+        rare_trait_list = []
+        traits = None
+        asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+        if asset_from_db:
+            traits = eval(asset_from_db[0]['traits'])
+        if not rare_trait_list:
+            asset_response = requests.request('GET', asset_url)
+            if asset_response.status_code == 200:
+                traits = asset_response.json()['traits']
+        if traits is None:
+            return
         for trait in traits:
             trait_type = trait['trait_type']
             trait_value = trait['value']
@@ -91,16 +105,22 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             if rarity_decimal <= 0.05:
                 rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
         rare_trait_list.sort(key=itemgetter(2))
+        return rare_trait_list
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
-            querystring = {"asset_contract_address": self.contract_address,
-                           "event_type": "successful",
-                           "only_opensea": "false",
-                           "offset": "0",
-                           "limit": self.limit}
-            headers = {"Accept": "application/json"}
-            self.response = requests.request("GET", self.os_events_url, headers=headers, params=querystring)
+            query_strings = {
+                'asset_contract_address': self.contract_address,
+                'event_type': 'successful',
+                'only_opensea': 'false',
+                'offset': 0,
+                'limit': self.limit
+            }
+            headers = CaseInsensitiveDict()
+            headers['Accept'] = 'application/json'
+            headers['User-Agent'] = self.ua.random
+            headers['x-api-key'] = self.os_api_key
+            self.response = requests.request('GET', self.os_events_url, headers=headers, params=query_strings)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -146,31 +166,13 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                 usd_price = float(base['payment_token']['usd_price'])
                 total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
-                timestamp = str(base['transaction']['timestamp']).split('T')
-                date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
-                month = datetime.date(date.year, date.month, date.day).strftime('%B')
             except (ValueError, TypeError):
                 continue
-            year = str(date.year)
-            day = str(date.day)
-            the_date = month + ' ' + day + ', ' + year
-            the_time = timestamp[1]
             link = asset['permalink']
-            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
-            rare_trait_list = []
-            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-            if asset_from_db:
-                traits = eval(asset_from_db[0]['traits'])
-                self.create_rare_trait_list(traits, rare_trait_list)
-            if not rare_trait_list:
-                asset_response = requests.request("GET", asset_url)
-                if asset_response.status_code == 200:
-                    traits = asset_response.json()['traits']
-                    self.create_rare_trait_list(traits, rare_trait_list)
+            rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
-            transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
-                                                    total_usd_cost, the_date, the_time, link, rare_trait_list,
-                                                    self.twitter_tags)
+            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
+                                                    rare_trait_list, self.twitter_tags)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -191,7 +193,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
     def download_image(self):  # downloads the image to upload
         try:
             img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
-            img = open(self.file_name, "wb")
+            img = open(self.file_name, 'wb')
             img.write(img_response.content)
             img.close()
             return True
@@ -199,8 +201,59 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             print(e, flush=True)
             return False
 
+    def process_via_ether_scan(self):
+        get_tx_hash_params = {
+            'module': 'account',
+            'action': 'tokennfttx',
+            'contractaddress': self.contract_address,
+            'startblock': 0,
+            'endblock': 999999999,
+            'sort': 'desc',
+            'apikey': self.ether_scan_api_key,
+            'page': 1,
+            'offset': self.limit * 2
+        }
+        get_tx_request = requests.request('GET', self.ether_scan_api_url, params=get_tx_hash_params)
+        tx_response = get_tx_request.json()
+        for i in range(0, self.limit * 2):
+            tx_response_base = tx_response['result'][i]
+            token_id = tx_response_base['tokenID']
+            tx_hash = tx_response_base['hash']
+            # TODO:
+            #   check if
+            #       tx hash db exists. if it does, put it into db...
+            #   else
+            #       continue
+            tx_receipt_params = {
+                'module': 'proxy',
+                'action': 'eth_getTransactionByHash',
+                'txhash': tx_hash,
+                'apikey': self.ether_scan_api_key
+            }
+            receipt_req = requests.request('GET', self.ether_scan_api_url, params=tx_receipt_params)
+            tx_receipt_response_base = receipt_req.json()['result']
+            tx_eth_hex_value = tx_receipt_response_base['value']
+            tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
+            eth_price_params = {
+                'module': 'stats',
+                'action': 'ethprice',
+                'apikey': self.ether_scan_api_key
+            }
+            eth_price_req = requests.request('GET', self.ether_scan_api_url, params=eth_price_params)
+            eth_price_base = eth_price_req.json()['result']
+            eth_usd_price = eth_price_base['ethusd']
+            usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+            if tx_eth_value != 0.0:
+                name = '{} #{}'.format(self.collection_name, token_id)
+                asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
+                rare_trait_list = self.create_rare_trait_list(token_id)
+                transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
+                                                        rare_trait_list, self.twitter_tags)
+                transaction.create_twitter_caption()
+                self.tx_queue.append(transaction)
+        return self.process_queue()
+
     def post_to_twitter(self):  # uploads to Twitter
-        return True
         try:
             image = open(self.file_name, 'rb')
             response = self.twitter.upload_media(media=image)
@@ -226,15 +279,14 @@ class ManageFlowObj:  # Main class which does all of the operations
         self.twitter_values_file = twitter_values_file
         self.tx_hash_db_name = tx_hash_db_name
         self.trait_db_name = trait_db_name
-        self.count_db = TinyDB('count.json')
-        self.count = 1
+        self.iteration = 1
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
+        # self.count_db = TinyDB('count_iterations_{}.json'.format(cont_address))
         print('All files are validated. Beginning program...')
         self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file, self.tx_hash_db_name,
                                                   self.trait_db_name)
-
         self._begin()
 
     def validate_params(self):
@@ -256,8 +308,8 @@ class ManageFlowObj:  # Main class which does all of the operations
                 values_file_test.close()
                 raise Exception('All words must be preceded by a hashtag (#).')
         collection_name_test = values_file_test.readline().strip()
-        test_collection_name_url = "https://api.opensea.io/api/v1/collection/{}".format(collection_name_test)
-        test_response = requests.request("GET", test_collection_name_url)
+        test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
+        test_response = requests.request('GET', test_collection_name_url)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             stats_json = collection_json['stats']
@@ -280,11 +332,25 @@ class ManageFlowObj:  # Main class which does all of the operations
         try:
             twitter_test.verify_credentials()
             twitter_test.client.close()
-            values_file_test.close()
         except twython.exceptions.TwythonAuthError:
             values_file_test.close()
             twitter_test.client.close()
             raise Exception('Invalid Twitter Keys supplied.')
+        test_os_key = values_file_test.readline().strip()
+        if test_os_key != 'None':
+            test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
+            test_os_headers = CaseInsensitiveDict()
+            test_os_headers['Accept'] = 'application/json'
+            test_os_headers['x-api-key'] = test_os_key
+            test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
+            if test_os_response.status_code != 200:
+                values_file_test.close()
+                raise Exception('Invalid OpenSea API key supplied.')
+        else:
+            print('No OpenSea API Key supplied...', flush=True)
+        # TODO:
+        #   Validate ether scan api key here...
+        values_file_test.close()
         print('Validation of Twitter Values .txt complete. No errors found...')
         if not str(self.tx_hash_db_name).lower().endswith('.json'):
             raise Exception('Transaction Hash DB must end with a .json file extension.')
@@ -306,7 +372,13 @@ class ManageFlowObj:  # Main class which does all of the operations
             self.check_if_new_post_exists(date_time_now)
         else:
             print('OS API is not working at roughly', date_time_now, flush=True)
-            time.sleep(30)
+            print('Attempting to use Ether Scan API at roughly', date_time_now, flush=True)
+            new_post_exists = self.__base_obj.process_via_ether_scan()
+            if new_post_exists:
+                self.try_to_post_to_twitter(date_time_now)
+            else:
+                print('No new post at roughly', date_time_now, flush=True)
+                time.sleep(5)
 
     def check_if_new_post_exists(self, date_time_now):
         new_post_exists = self.__base_obj.parse_response_objects()
@@ -337,5 +409,5 @@ class ManageFlowObj:  # Main class which does all of the operations
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            self.count_db.insert({'id': self.count})
-            self.count += 1
+            # self.count_db.insert({'iteration': self.iteration})
+            # self.iteration += 1
