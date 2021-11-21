@@ -186,56 +186,62 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return rare_trait_list
 
     def process_via_ether_scan(self):
-
-        get_tx_hash_params = {
-            'module': 'account',
-            'action': 'tokennfttx',
-            'contractaddress': self.contract_address,
-            'startblock': 0,
-            'endblock': 999999999,
-            'sort': 'desc',
-            'apikey': self.ether_scan_api_key,
-            'page': 1,
-            'offset': self.ether_scan_limit
-        }
-        get_tx_request = requests.request('GET', self.ether_scan_api_url, params=get_tx_hash_params)
-        tx_response = get_tx_request.json()
-        for i in range(0, self.ether_scan_limit):
-            tx_response_base = tx_response['result'][i]
-            token_id = tx_response_base['tokenID']
-            tx_hash = str(tx_response_base['hash'])
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-            if tx_exists:
-                continue
-            tx_receipt_params = {
-                'module': 'proxy',
-                'action': 'eth_getTransactionByHash',
-                'txhash': tx_hash,
-                'apikey': self.ether_scan_api_key
+        try:
+            get_tx_hash_params = {
+                'module': 'account',
+                'action': 'tokennfttx',
+                'contractaddress': self.contract_address,
+                'startblock': 0,
+                'endblock': 999999999,
+                'sort': 'desc',
+                'apikey': self.ether_scan_api_key,
+                'page': 1,
+                'offset': self.ether_scan_limit
             }
-            get_tx_details_request = requests.request('GET', self.ether_scan_api_url, params=tx_receipt_params)
-            tx_details_response_base = get_tx_details_request.json()['result']
-            tx_eth_hex_value = tx_details_response_base['value']
-            tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
-            eth_price_params = {
-                'module': 'stats',
-                'action': 'ethprice',
-                'apikey': self.ether_scan_api_key
-            }
-            eth_price_req = requests.request('GET', self.ether_scan_api_url, params=eth_price_params)
-            eth_price_base = eth_price_req.json()['result']
-            eth_usd_price = eth_price_base['ethusd']
-            usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
-            if tx_eth_value != 0.0:
-                name = '{} #{}'.format(self.collection_name, token_id)
-                asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
-                rare_trait_list = self.create_rare_trait_list(token_id)
-                self.tx_db.insert({'tx': tx_hash})
-                transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
-                                                        rare_trait_list, self.twitter_tags)
-                transaction.create_twitter_caption()
-                self.tx_queue.append(transaction)
-        return self.process_queue()
+            get_tx_request = requests.request('GET', self.ether_scan_api_url, params=get_tx_hash_params)
+            tx_response = get_tx_request.json()
+            for i in range(0, self.ether_scan_limit):
+                tx_response_base = tx_response['result'][i]
+                token_id = tx_response_base['tokenID']
+                tx_hash = str(tx_response_base['hash'])
+                from_address = tx_response_base['from']
+                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
+                    continue
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                if tx_exists:
+                    continue
+                tx_receipt_params = {
+                    'module': 'proxy',
+                    'action': 'eth_getTransactionByHash',
+                    'txhash': tx_hash,
+                    'apikey': self.ether_scan_api_key
+                }
+                get_tx_details_request = requests.request('GET', self.ether_scan_api_url, params=tx_receipt_params)
+                tx_details_response_base = get_tx_details_request.json()['result']
+                tx_eth_hex_value = tx_details_response_base['value']
+                tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
+                eth_price_params = {
+                    'module': 'stats',
+                    'action': 'ethprice',
+                    'apikey': self.ether_scan_api_key
+                }
+                eth_price_req = requests.request('GET', self.ether_scan_api_url, params=eth_price_params)
+                eth_price_base = eth_price_req.json()['result']
+                eth_usd_price = eth_price_base['ethusd']
+                usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+                if tx_eth_value != 0.0:
+                    name = '{} #{}'.format(self.collection_name, token_id)
+                    asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
+                    rare_trait_list = self.create_rare_trait_list(token_id)
+                    self.tx_db.insert({'tx': tx_hash})
+                    transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
+                                                            rare_trait_list, self.twitter_tags)
+                    transaction.create_twitter_caption()
+                    self.tx_queue.append(transaction)
+            return self.process_queue()
+        except Exception as e:
+            print(e, flush=True)
+            return -1
 
     def post_to_twitter(self):  # uploads to Twitter
         try:
@@ -378,7 +384,10 @@ class ManageFlowObj:  # Main class which does all of the operations
             print('OS API is not working at roughly', date_time_now, flush=True)
             print('Attempting to use Ether Scan API at roughly', date_time_now, flush=True)
             new_post_exists = self.__base_obj.process_via_ether_scan()
-            if new_post_exists:
+            if new_post_exists == -1:
+                print('Error processing via Ether Scan API at roughly', date_time_now, flush=True)
+                time.sleep(30)
+            elif new_post_exists:
                 self.try_to_post_to_twitter(date_time_now)
             else:
                 print('No new post at roughly', date_time_now, flush=True)
