@@ -30,4 +30,6 @@ ex = ManageFlowObj('Twitter Values .txt', 'Trait DB.json')
 # nft_trait_db.json
 
 # example instantiator:
-mfo = ManageFlowObj('twitter_values_humanoids.txt', 'humanoids_trait_db.json')
+mfo = ManageFlowObj('twitter_values_humanoids.txt', 'humanoids_trait_db.json')  # will print traits, assuming valid file
+# or
+mfo2 = ManageFlowObj('twitter_values_humanoids.txt')  # will NOT print traits
