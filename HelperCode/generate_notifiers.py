@@ -31,7 +31,6 @@ for i in range(0, len(tmux_sessions)):
         n.write('\n')
         n.write('''{}_FILE = find_file.find(\'{}\')\n'''.format(tmux_sessions[session_num].upper(),
                                                                 file_to_session[tmux_sessions[session_num]]))
-        # n.write('''print({}_FILE)\n\n'''.format(tmux_sessions[session_num].upper()))
         n.write('''count_{}_db = TinyDB(\'count_iterations_{}.json\')\n\n'''.
                 format(tmux_sessions[session_num].upper(), file_to_session[tmux_sessions[session_num]]. split('.')[0]))
         n.write('''occurred = False\n''')

@@ -107,18 +107,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         for i in range(0, self.os_limit):
             try:
                 base = self.response.json()['asset_events'][i]
-            except TypeError:
-                continue
-            asset = base['asset']
-            try:
+                asset = base['asset']
                 name = str(asset['name'])
-            except TypeError:
-                continue
-            try:
                 image_url = asset['image_url']
+                tx_hash = str(base['transaction']['transaction_hash'])
             except TypeError:
                 continue
-            tx_hash = str(base['transaction']['transaction_hash'])
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
             if tx_exists:
                 continue
@@ -127,9 +121,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                 usd_price = float(base['payment_token']['usd_price'])
                 total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            link = asset['permalink']
             rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
@@ -138,7 +132,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             self.tx_queue.append(transaction)
         return self.process_queue()
 
-    def process_queue(self):  # processes the queue thus far. this is a self-managing queue
+    def process_queue(self):  # processes the queue thus far
         index = 0
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
@@ -293,6 +287,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         words_in_hash_tag = hashtags_test.split()
         if hashtags_test != 'None':
             if len(hashtags_test) == 0 or hashtags_test.split() == 0:
+                values_file_test.close()
                 raise Exception('Hashtags field is empty.')
             if len(hashtags_test) >= 120:
                 values_file_test.close()
