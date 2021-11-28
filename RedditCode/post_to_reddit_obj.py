@@ -3,6 +3,7 @@ from HelperCode import find_file
 from operator import itemgetter
 import prawcore.exceptions
 import requests
+from requests.structures import CaseInsensitiveDict
 import time
 import praw
 from tinydb import TinyDB, Query
@@ -47,6 +48,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
         password = values.readline().strip()
         user_agent = values.readline().strip()
         self.username = values.readline().strip()
+        self.os_api_key = values.readline().strip()
         values.close()
         self.file_name = self.collection_name + '.jpeg'
         self.contract_address = address
@@ -88,7 +90,9 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                            "only_opensea": "false",
                            "offset": "0",
                            "limit": self.limit}
-            headers = {"Accept": "application/json"}
+            headers = CaseInsensitiveDict()
+            headers['Accept'] = 'application/json'
+            headers['x-api-key'] = self.os_api_key
             self.response = requests.request("GET", self.os_events_url, headers=headers, params=querystring)
             return self.response.status_code == 200
         except Exception as e:

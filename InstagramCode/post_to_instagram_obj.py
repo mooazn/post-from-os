@@ -206,10 +206,11 @@ class ManageFlowObj:
         self.instagram_values_file = instagram_values_file
         self.instagram_gen_token_file = instagram_generate_long_user_token_credentials_file
         contract_address = self.validate_params()
+        self.begin_time = int(time.time())
         self.gen_long_lived_token_class = GenerateLongLivedToken(self.instagram_gen_token_file, contract_address)
-        first_time_generated = self.gen_long_lived_token_class.generate()
-        if first_time_generated:
-            print('Generated token for first time!', flush=True)
+        # first_time_generated = self.gen_long_lived_token_class.generate()
+        # if first_time_generated:
+        #     print('Generated token for first time!', flush=True)
         self.__base_obj = _PostFromOpenSeaInstagram(self.instagram_values_file, contract_address)
         self.begin()
 
@@ -262,14 +263,15 @@ class ManageFlowObj:
             raise Exception('Invalid img.bb key provided.')
         print('IMG BB key validated...')
         test_page_id = test_instagram_values.readline().strip()
-        test_insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
-            format(test_page_id)
-        test_page_req = requests.request('GET', test_insta_id_url)
-        fake_status_code = int(test_page_req.json()['error']['code'])
-        if fake_status_code != 200:
-            test_instagram_values.close()
-            raise Exception('Invalid page ID for Facebook supplied')
-        print('Facebook page ID validated...')
+        print('Page ID is:', test_page_id)
+        # test_insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
+        #     format(test_page_id)
+        # test_page_req = requests.request('GET', test_insta_id_url)
+        # fake_status_code = int(test_page_req.json()['error']['code'])
+        # if fake_status_code != 200:
+        #     test_instagram_values.close()
+        #     raise Exception('Invalid page ID for Facebook supplied')
+        # print('Facebook page ID validated...')
         test_os_key = test_instagram_values.readline().strip()
         if test_os_key != 'None':
             test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
@@ -330,20 +332,22 @@ class ManageFlowObj:
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            time_now = int(time.time())
-            time_elapsed_since_token_generated = None
-            if self.gen_long_lived_token_class.previous_time is not None:
-                time_elapsed_since_token_generated = time_now - self.gen_long_lived_token_class.previous_time
-            elif self.gen_long_lived_token_class.generated_time is not None:
-                time_elapsed_since_token_generated = time_now - self.gen_long_lived_token_class.generated_time
-            if time_elapsed_since_token_generated >= 3600 * 24 * 50:
-                if self.gen_long_lived_token_class.previous_time is None:
-                    self.gen_long_lived_token_class.previous_time = None
-                generated = self.gen_long_lived_token_class.generate()
-                if generated:
-                    print('Generated new long lived user access token at roughly', date_time_now, flush=True)
-                else:
-                    print('Generating token failed. Email sent.', date_time_now, flush=True)
+            if int(time.time()) - self.begin_time >= 3600 * 24 * 50:
+                self.gen_long_lived_token_class.send_email_to_manually_change_user_token()
+            # time_now = int(time.time())
+            # time_elapsed_since_token_generated = None
+            # if self.gen_long_lived_token_class.previous_time is not None:
+            #     time_elapsed_since_token_generated = time_now - self.gen_long_lived_token_class.previous_time
+            # elif self.gen_long_lived_token_class.generated_time is not None:
+            #     time_elapsed_since_token_generated = time_now - self.gen_long_lived_token_class.generated_time
+            # if time_elapsed_since_token_generated >= 3600 * 24 * 50:
+            #     if self.gen_long_lived_token_class.previous_time is None:
+            #         self.gen_long_lived_token_class.previous_time = None
+            #     generated = self.gen_long_lived_token_class.generate()
+            #     if generated:
+            #         print('Generated new long lived user access token at roughly', date_time_now, flush=True)
+            #     else:
+            #         print('Generating token failed. Email sent.', date_time_now, flush=True)
 
 
 class GenerateLongLivedToken:
@@ -363,7 +367,7 @@ class GenerateLongLivedToken:
         self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
                               '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input'
         with open(token_file) as tokens:
-            if len(tokens.readlines()) != 7:
+            if 7 > len(tokens.readlines()) > 8:
                 raise Exception('The Instagram Generate User Token Values file must be formatted correctly.')
         tokens = open(token_file, 'r')
         self.client_id = tokens.readline().strip()
@@ -373,17 +377,21 @@ class GenerateLongLivedToken:
         self.gmail_email = tokens.readline().strip()
         self.gmail_password = tokens.readline().strip()
         self.gmail_to_email = tokens.readline().strip()
+        self.access_token = tokens.readline().strip()
         tokens.close()
         self.first_time = True
         self.previous_time = None
         self.user_access_token_file = 'instagram_user_access_token_{}.txt'.format(contract_address)
-        if os.path.exists(self.user_access_token_file):
-            get_time_from_token_file = open(self.user_access_token_file, 'r')
-            get_time_from_token_file.readline().strip()
-            previous_generated_time = int(get_time_from_token_file.readline().strip())
-            difference = int(time.time()) - previous_generated_time
-            if difference < 3600 * 24 * 50:
-                self.previous_time = previous_generated_time
+        with open(self.user_access_token_file, 'w') as tk_file:
+            if self.access_token != '':
+                tk_file.write(self.access_token)
+        # if os.path.exists(self.user_access_token_file):
+        #     get_time_from_token_file = open(self.user_access_token_file, 'r')
+        #     get_time_from_token_file.readline().strip()
+        #     previous_generated_time = int(get_time_from_token_file.readline().strip())
+        #     difference = int(time.time()) - previous_generated_time
+        #     if difference < 3600 * 24 * 50:
+        #         self.previous_time = previous_generated_time
 
     def generate(self):
         if self.previous_time is not None:

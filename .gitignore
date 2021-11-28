@@ -16,6 +16,8 @@ RedditCode/post_humanoids_reddit.py
 TwitterCode/twitter_values_banana.txt
 TwitterCode/twitter_values_humanoids.txt
 TwitterCode/twitter_values_sirens.txt
+TwitterCode/twitter_values_yachts.txt
 TwitterCode/post_bananas_twitter.py
 TwitterCode/post_humanoids_twitter.py
 TwitterCode/post_sirens_twitter.py
+TwitterCode/post_yachts_twitter.py

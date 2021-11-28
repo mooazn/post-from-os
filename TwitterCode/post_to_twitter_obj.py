@@ -56,8 +56,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         twitter_access_token = values.readline().strip()
         twitter_access_token_secret = values.readline().strip()
         self.os_api_key = values.readline().strip()
-        self.ether_scan_api_key = values.readline().strip()
+        self.ether_scan_values = values.readline().strip().split()
         values.close()
+        self.ether_scan_api_key = self.ether_scan_values[0]
+        self.ether_scan_name = self.collection_name
+        if len(self.ether_scan_values) > 1:
+            self.ether_scan_name = self.ether_scan_values[1]
         self.file_name = self.collection_name + '_twitter.jpeg'
         self.contract_address = address
         self.total_supply = supply
@@ -68,8 +72,10 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.os_obj_to_post = None
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_twitter_db.json')
         self.tx_query = Query()
-        self.trait_db = TinyDB(trait_db_name)
-        self.trait_query = Query()
+        self.trait_db_name = trait_db_name
+        if self.trait_db_name is not None:
+            self.trait_db = TinyDB(self.trait_db_name)
+            self.trait_query = Query()
         self.tx_queue = []
         self.os_limit = 10
         self.ether_scan_limit = int(self.os_limit * 1.5)
@@ -124,7 +130,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            rare_trait_list = self.create_rare_trait_list(token_id)
+            rare_trait_list = []
+            if self.trait_db_name is not None:
+                rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
                                                     rare_trait_list, self.twitter_tags)
@@ -224,9 +232,11 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_usd_price = eth_price_base['ethusd']
                 usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                 if tx_eth_value != 0.0:
-                    name = '{} #{}'.format(self.collection_name, token_id)
+                    name = '{} #{}'.format(self.ether_scan_name, token_id)
                     asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
-                    rare_trait_list = self.create_rare_trait_list(token_id)
+                    rare_trait_list = []
+                    if self.trait_db_name is not None:
+                        rare_trait_list = self.create_rare_trait_list(token_id)
                     self.tx_db.insert({'tx': tx_hash})
                     transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
                                                             rare_trait_list, self.twitter_tags)
@@ -346,7 +356,8 @@ class ManageFlowObj:  # Main class which does all of the operations
             print('OpenSea Key validated...')
         else:
             print('No OpenSea API Key supplied...')
-        test_ether_scan_key = values_file_test.readline().strip()
+        test_ether_scan_values = values_file_test.readline().strip().split()
+        test_ether_scan_key = test_ether_scan_values[0]
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
             format(test_ether_scan_key)
         test_ether_scan_response = requests.request('GET', test_ether_scan_url)
