@@ -91,6 +91,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.twitter.client.close()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
+        if self.os_api_key == 'None':
+            return False
         try:
             query_strings = {
                 'asset_contract_address': self.contract_address,
@@ -165,14 +167,17 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return False
 
     def create_rare_trait_list(self, token_id):
-        asset_url = self.os_asset_url + self.contract_address + '/' + token_id
         rare_trait_list = []
         traits = None
         asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
         if asset_from_db:
             traits = eval(asset_from_db[0]['traits'])
         if not rare_trait_list:
-            asset_response = requests.request('GET', asset_url)
+            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+            asset_headers = CaseInsensitiveDict()
+            asset_headers['User-Agent'] = self.ua.random
+            asset_headers['x-api-key'] = self.os_api_key
+            asset_response = requests.request('GET', asset_url, headers=asset_headers)
             if asset_response.status_code == 200:
                 traits = asset_response.json()['traits']
         if traits is None:
