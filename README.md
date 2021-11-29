@@ -16,6 +16,8 @@ https://twitter.com/BoredBananasBot
 
 https://twitter.com/NoidsSalesBot
 
+https://twitter.com/YachtSalesBot
+
 ---
 
 #### Because this README is still incomplete and will take some time to write all of the 'documentation', feel free to join my Discord server below for any development changes, development help, or general questions that you may have:
