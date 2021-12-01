@@ -1,20 +1,27 @@
 # post-from-os
 
-### NOTE: The below accounts are ones that I have my code geared towards and have hosted on my virtual private server. I have not deployed either Discord or Reddit code to my server. I have no use to deploy either of those because no community requested a Discord/Reddit bot. I will continue to create and fix bots for various social media platforms even if I do not use them.
+### NOTE: The below accounts are ones that I have my code geared towards and have hosted on my virtual private server. I have not deployed Reddit code to my server. I have no use to deploy it because no community requested a Reddit bot. However, I will continue to create and fix bots for various social media platforms even if I do not use them.
+
 ####  Example of Reddit: https://www.reddit.com/user/postsalestoredditest
 ####  Example Screenshots of Discord: https://ibb.co/XXgdFNR
 
-Instagram Account: 
+#### Instagram Account: 
 
 https://www.instagram.com/sirens_of_the_sea_sales_bot/
 
-Twitter Accounts: 
+#### Twitter Accounts: 
 
 https://twitter.com/SirenSalesBot
 
 https://twitter.com/BoredBananasBot
 
 https://twitter.com/NoidsSalesBot
+
+https://twitter.com/YachtSalesBot
+
+#### Discord Bot (for the server):
+
+https://twitter.com/ApeHarbour
 
 ---
 
