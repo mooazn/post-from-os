@@ -12,15 +12,19 @@ ex = ManageFlowObj('Twitter Values .txt', 'Trait DB.json')
 # twitter api key secret
 # twitter access token
 # twitter access token secret
+# OS API key
+# Etherscan API key Default Name
 
 # for example:
 # -----twitter_values.txt-----
 # #nfts
 # my-nft
-# api_key
-# api_key_secret
-# access_token
-# access_token_secret
+# twitter_api_key
+# twitter_api_key_secret
+# twitter_access_token
+# twitter_access_token_secret
+# OS API key OR None
+# Etherscan API key Name OR Etherscan API key
 
 # The next provided string (Trait DB Name) is the .json file name for the trait TinyDB. This DB is used to efficiently
 # query traits of a collection without hitting the asset endpoint (defaulted to None. if you do not pass a string in
@@ -29,7 +33,7 @@ ex = ManageFlowObj('Twitter Values .txt', 'Trait DB.json')
 # for example:
 # nft_trait_db.json
 
-# example instantiator:
+# example instantiators:
 mfo = ManageFlowObj('twitter_values_humanoids.txt', 'humanoids_trait_db.json')  # will print traits, assuming valid file
 # or
 mfo2 = ManageFlowObj('twitter_values_humanoids.txt')  # will NOT print traits

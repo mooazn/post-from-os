@@ -23,8 +23,7 @@ for i in files:
             if fuzz_partial_ratio >= 75:
                 file_to_session[j] = i
 
-session_num = 0
-for i in range(0, len(tmux_sessions)):
+for session_num in range(0, len(tmux_sessions)):
     with open('notifier_{}.py'.format(tmux_sessions[session_num]), 'w') as n:
         n.write('from HelperCode import find_file\nimport os\nimport time\nfrom tinydb import TinyDB\n\n')
         n.write('''TMUX_{}_NAME = '{}' \n'''.format(tmux_sessions[session_num].upper(), tmux_sessions[session_num]))
@@ -50,4 +49,3 @@ for i in range(0, len(tmux_sessions)):
         n.write('''if occurred:\n\t\t''')
         n.write('''occurred = False\n\t''')
         n.write('''prev_len = len(count_{}_db)\n'''.format(tmux_sessions[session_num].upper()))
-        session_num += 1
