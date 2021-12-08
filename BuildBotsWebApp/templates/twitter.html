@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="static/styles.css">
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+
+<script>
+
+    function toggle_display(){
+    el = document.querySelector('.ln');
+
+      if(el.style.visibility == 'hidden'){
+          el.style.visibility = 'visible'
+      }else{
+         el.style.visibility = 'hidden'
+      }
+    }
+
+</script>
+
+<body>
+    <div id="container">
+      <div id="content">
+        <form method="POST">
+            {{ form.csrf_token }}
+
+            {{ form.your_name.label }}
+            <div class="yn">
+                Your name
+                {{ form.your_name }}
+            </div>
+
+            {% if error %}
+                <p style="color:red"> {{ error }} </p>
+            {% endif %}
+
+            {{ form.last_name.label }}
+            <div class="ln">
+                Test
+                {{ form.last_name }}
+            </div>
+
+            <input type="submit" value="Submit">
+
+        </form>
+            <button onclick="toggle_display()">Toggle display</button>
+      </div>
+    </div>
+
+    <div id="social">
+        <a href="https://github.com/epicmanmoo/post-from-os">Github</a>
+    </div>
+
+</body>
+</html>

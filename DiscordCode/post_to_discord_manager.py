@@ -1,29 +1,36 @@
-import asyncio
-import discord
-import post_to_discord_obj
-from post_to_discord_obj import ManageFlowObj, EventType
-import requests
-from requests.structures import CaseInsensitiveDict
+import sys
+sys.path.append('../')
+import asyncio  # noqa: E402
+import discord  # noqa: E402
+from HelperCode import find_file  # noqa: E402
+import post_to_discord_obj  # noqa: E402
+from post_to_discord_obj import ManageFlowObj, EventType  # noqa: E402
+import requests  # noqa: E402
+from requests.structures import CaseInsensitiveDict  # noqa: E402
 
 client = discord.Client()
 sales_obj = ManageFlowObj()
 sales_channel = -1
 listings_obj = ManageFlowObj()
 listings_channel = -1
+collection_name = ''
+BOT_PREFIX = ''
+commands = []
 
 
 class ManageManager:
-    def __init__(self, discord_values_file):
+    def __init__(self, discord_values_file, trait_db=None):
         self.discord_values = discord_values_file
+        self.trait_db = trait_db
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
-        global sales_obj, listings_obj, sales_channel, listings_channel
+        global sales_obj, listings_obj, sales_channel, listings_channel, BOT_PREFIX, collection_name, commands
         print('Beginning validation of Discord Values File...')
         if not str(self.discord_values).endswith('.txt'):
             raise Exception('Discord values must be a .txt file.')
         with open(self.discord_values) as dv:
-            if len(dv.readlines()) != 6:
+            if len(dv.readlines()) != 8:
                 raise Exception('The Discord Values file must be formatted correctly.')
         test_discord_values = open(self.discord_values, 'r')
         discord_token = test_discord_values.readline().strip()
@@ -45,6 +52,7 @@ class ManageManager:
             collection_json = test_response.json()['collection']
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
             contract_address = primary_asset_contracts_json['address']
+            collection_name = collection_name_test
         else:
             test_discord_values.close()
             raise Exception('The provided collection name does not exist.')
@@ -91,10 +99,40 @@ class ManageManager:
             print('OpenSea Key validated...')
         else:
             print('No OpenSea API Key supplied...')
+        test_prefix = test_discord_values.readline().strip()
+        if test_prefix == 'None':
+            BOT_PREFIX = '!'
+            print('Set default value of \'!\' as prefix.')
+        else:
+            BOT_PREFIX = test_prefix
+            print('Set value of \'{}\' as prefix.'.format(BOT_PREFIX))
+        test_commands = test_discord_values.readline().strip()
+        if test_commands != 'None':
+            test_commands = test_commands.split()
+            print('There {} a total of {} custom command(s): {}'.format('is' if len(test_commands) == 1 else 'are',
+                                                                        len(test_commands), test_commands))
+            commands = test_commands
+        else:
+            print('No custom commands supplied.')
         test_discord_values.close()
         print('Validation of Discord Values .txt complete. No errors found...')
-        sales_obj.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
-                          [test_os_api_key]])
+        trait_db_location = None
+        if self.trait_db is not None:
+            if not str(self.trait_db).lower().endswith('.json'):
+                raise Exception('Trait DB must end with a .json file extension.')
+            trait_db_location = find_file.find(self.trait_db)
+            if trait_db_location is None:
+                raise Exception('Trait DB .json not found. Either type the name correctly or remove the parameter.')
+            print('Validation of Trait DB Name .json complete. No errors found...')
+        else:
+            print('Skipping Trait DB Name .json. No file was provided.')
+        print('All files are validated. Beginning program...')
+        if self.trait_db is None:
+            sales_obj.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
+                              [test_os_api_key]])
+        else:
+            sales_obj.create_with_traits([[collection_name_test], [contract_address], [test_discord_embed_icon],
+                                          [r, g, b], [test_os_api_key]], trait_db_location)
         if listings_channel != -1:
             listings_obj.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
                                 [test_os_api_key]])
@@ -102,6 +140,7 @@ class ManageManager:
         if listings_channel != -1:
             client.loop.create_task(process_listings())
         try:
+            print('Beginning program...')
             run(discord_token)
         except discord.errors.LoginFailure:
             raise Exception('Invalid Discord token supplied.')
@@ -114,12 +153,18 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    global BOT_PREFIX, collection_name, commands
     if message.author == client.user:
         return
 
-    if message.content == '$yacht':
-        await message.channel.send('https://www.fraseryachts.com/uploads/image/yachts/ace/Lurssen_yacht_for_sale_Ace_'
-                                   '18362.jpg')
+    if message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
+        await post_to_discord_obj.eth_price(sales_obj, message)
+
+    if message.content.startswith('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
+        await post_to_discord_obj.custom_command_1(sales_obj, message)
+
+    if message.content.startswith('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
+        await post_to_discord_obj.custom_command_2(sales_obj, message)
 
 
 async def process_sales():

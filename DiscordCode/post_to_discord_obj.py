@@ -1,4 +1,6 @@
 import datetime
+import pprint
+
 import discord
 from discord.embeds import EmptyEmbed
 from enum import Enum
@@ -20,7 +22,7 @@ class _OpenSeaTransactionObject:
     discord_embed = None
 
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, total_usd_cost_, link_, tx_type_,
-                 image_thumbnail_url_, embed_icon_url_, rgb_color_):
+                 image_thumbnail_url_, embed_icon_url_, rgb_color_, seller_link_, buyer_link_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -35,6 +37,8 @@ class _OpenSeaTransactionObject:
         self.r = rgb_color_[0]
         self.g = rgb_color_[1]
         self.b = rgb_color_[2]
+        self.seller_link = seller_link_
+        self.buyer_link = buyer_link_
 
     def create_discord_embed(self):
         icon_url = str(self.embed_icon_url) if self.embed_icon_url != 'None' else EmptyEmbed
@@ -43,13 +47,15 @@ class _OpenSeaTransactionObject:
         if self.tx_type == EventType.SALE.value:
             embed = discord.Embed(title=self.name, url=self.link,
                                   description='Ξ{} (${})'.format(self.eth_nft_price, self.total_usd_cost) + '\n\n' +
-                                              'Seller: {}\nBuyer: {}'.format(self.seller, self.buyer),
+                                              'Seller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link,
+                                                                                         self.buyer, self.buyer_link),
                                   color=embed_color)
             embed.set_author(name="New Purchase!", icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
             embed = discord.Embed(title=self.name, url=self.link, description='Ξ{} (${})'.format(
-                self.eth_nft_price, self.total_usd_cost) + '\n\n' + 'Seller: {}'.format(self.seller),
+                self.eth_nft_price, self.total_usd_cost) + '\n\n' + 'Seller: [{}]({})'.format(self.seller,
+                                                                                              self.seller_link),
                                   color=embed_color)
             embed.set_author(name="New Listing!", icon_url=icon_url)
             embed.set_image(url=self.image_thumbnail_url)
@@ -57,22 +63,27 @@ class _OpenSeaTransactionObject:
 
 
 class _PostFromOpenSeaDiscord:
-    def __init__(self, values):
+    def __init__(self, values, trait_db=None):
         self.collection_name = values[0][0]
         self.contract_address = values[1][0]
         self.embed_icon_url = values[2][0]
         self.embed_rgb_color = values[3]
         self.os_api_key = values[4][0]
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
-        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
+        self.eth_price_url = 'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD'
         self.response = None
         self.os_obj_to_post = None
         self.tx_type = None
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_discord_db.json')
-        self.tx_db.truncate()
         self.tx_query = Query()
+        self.id_db = TinyDB(self.collection_name + '_listing_id_discord_db.json')
+        self.id_query = Query()
         self.tx_queue = []
-        self.limit = 2
+        self.trait_db = None
+        if trait_db is not None:
+            self.trait_db = TinyDB(trait_db)
+            self.trait_query = Query()
+        self.limit = 5
         self.ua = UserAgent()
 
     def get_recent_sales(self, tx_type):
@@ -102,11 +113,14 @@ class _PostFromOpenSeaDiscord:
             try:
                 base = self.response.json()['asset_events'][i]
                 asset = base['asset']
+                token_id = asset['token_id']
                 name = str(asset['name'])
                 image_url = asset['image_url']
                 image_thumbnail_url = asset['image_thumbnail_url']
                 seller_address = str(base['seller']['address'])
+                seller_link = 'https://opensea.io/{}'.format(seller_address)
                 buyer_address = str(asset['owner']['address'])
+                buyer_link = 'https://opensea.io/{}'.format(buyer_address)
                 usd_price = float(base['payment_token']['usd_price'])
                 link = asset['permalink']
             except TypeError:
@@ -142,14 +156,14 @@ class _PostFromOpenSeaDiscord:
                 self.tx_db.insert({'tx': tx_hash})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price,
                                                         total_usd_cost, link, self.tx_type, image_thumbnail_url,
-                                                        self.embed_icon_url, self.embed_rgb_color)
+                                                        self.embed_icon_url, self.embed_rgb_color, seller_link,
+                                                        buyer_link)
             elif self.tx_type == EventType.LISTING.value:
                 try:
                     listing_id = str(base['id'])
                 except TypeError:
                     continue
-                listing_exists = False if len(
-                    self.tx_db.search(self.tx_query.id == listing_id)) == 0 else True
+                listing_exists = False if len(self.id_db.search(self.id_query.id == listing_id)) == 0 else True
                 if listing_exists:
                     continue
                 try:
@@ -157,10 +171,10 @@ class _PostFromOpenSeaDiscord:
                     total_usd_cost = '{:.2f}'.format(round(price * usd_price, 2))
                 except (ValueError, TypeError):
                     continue
-                self.tx_db.insert({'id': listing_id})
+                self.id_db.insert({'id': listing_id})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, total_usd_cost, link,
                                                         self.tx_type, image_thumbnail_url, self.embed_icon_url,
-                                                        self.embed_rgb_color)
+                                                        self.embed_rgb_color, seller_link, buyer_link)
             transaction.create_discord_embed()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -187,6 +201,9 @@ class ManageFlowObj:
 
     def create(self, values):
         self.base_obj = _PostFromOpenSeaDiscord(values)
+
+    def create_with_traits(self, values, trait_db):
+        self.base_obj = _PostFromOpenSeaDiscord(values, trait_db)
 
     def check_os_api_status(self, tx_type):
         self.date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
@@ -219,3 +236,48 @@ async def try_to_post_embed_to_discord(mfo, channel):
         print(e, flush=True)
         print('Post to Discord error at roughly', mfo.date_time_now, flush=True)
         return False
+
+
+async def eth_price(mfo, message):
+    eth_price_url = mfo.base_obj.eth_price_url
+    eth_price_request = requests.request('GET', eth_price_url)
+    eth_price_usd = eth_price_request.json()['USD']
+    await message.channel.send('${}'.format(eth_price_usd))
+
+
+async def custom_command_1(mfo, message):
+    stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(mfo.base_obj.collection_name)
+    stats_request = requests.request('GET', stats_url)
+    floor_price_eth = stats_request.json()['stats']['floor_price']
+    eth_price_url = mfo.base_obj.eth_price_url
+    eth_price_request = requests.request('GET', eth_price_url)
+    eth_price_usd = eth_price_request.json()['USD']
+    floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
+    await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the '
+                               'actual floor price, please visit the collection on Opensea: '
+                               'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd,
+                                                                         mfo.base_obj.collection_name))
+
+
+async def custom_command_2(mfo, message):
+    # TODO:
+    #  Replace with API call
+    if mfo.base_obj.trait_db is not None:
+        token_id = message.content.split()[1]
+        asset = mfo.base_obj.trait_db.search(mfo.base_obj.trait_query.id == int(token_id))
+        try:
+            asset_json = eval(asset[0]['traits'])
+        except IndexError:
+            await message.channel.send('Invalid Token ID.')
+            return
+        image_url = asset_json['image_url']
+        owner = asset_json['owner']['address']
+        owner_link = 'https://opensea.io/{}'.format(owner)
+        asset_link = 'https://opensea.io/assets/{}/{}'.format(mfo.base_obj.contract_address, token_id)
+        name = asset_json['asset_contract']['name']
+        embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
+                                             mfo.base_obj.embed_rgb_color[2])
+        asset_embed = discord.Embed(title='{} {}'.format(name, token_id), url=asset_link, color=embed_color)
+        asset_embed.set_image(url=image_url)
+        asset_embed.description = 'Owner: [{}]({})'.format(owner[0:8], owner_link)
+        await message.channel.send(embed=asset_embed)

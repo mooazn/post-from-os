@@ -292,7 +292,7 @@ class ManageFlowObj:  # Main class which does all of the operations
 
     def validate_params(self):
         print('Beginning validation of Twitter Values File...')
-        if not str(self.twitter_values_file).endswith('.txt'):
+        if not str(self.twitter_values_file).lower().endswith('.txt'):
             raise Exception('Twitter Values must be a .txt file.')
         with open(self.twitter_values_file) as values_file:
             if len(values_file.readlines()) != 8:
