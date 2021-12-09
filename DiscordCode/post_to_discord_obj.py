@@ -1,6 +1,4 @@
 import datetime
-import pprint
-
 import discord
 from discord.embeds import EmptyEmbed
 from enum import Enum
@@ -113,7 +111,6 @@ class _PostFromOpenSeaDiscord:
             try:
                 base = self.response.json()['asset_events'][i]
                 asset = base['asset']
-                token_id = asset['token_id']
                 name = str(asset['name'])
                 image_url = asset['image_url']
                 image_thumbnail_url = asset['image_thumbnail_url']
@@ -260,24 +257,26 @@ async def custom_command_1(mfo, message):
 
 
 async def custom_command_2(mfo, message):
-    # TODO:
-    #  Replace with API call
     if mfo.base_obj.trait_db is not None:
-        token_id = message.content.split()[1]
-        asset = mfo.base_obj.trait_db.search(mfo.base_obj.trait_query.id == int(token_id))
         try:
-            asset_json = eval(asset[0]['traits'])
-        except IndexError:
-            await message.channel.send('Invalid Token ID.')
+            token_id = int(message.content.split()[1])
+        except ValueError:
             return
-        image_url = asset_json['image_url']
-        owner = asset_json['owner']['address']
-        owner_link = 'https://opensea.io/{}'.format(owner)
-        asset_link = 'https://opensea.io/assets/{}/{}'.format(mfo.base_obj.contract_address, token_id)
-        name = asset_json['asset_contract']['name']
+        asset_url = "https://api.opensea.io/api/v1/assets?token_ids={}" \
+                    "&asset_contract_address={}".format(token_id, mfo.base_obj.contract_address)
+        asset_headers = CaseInsensitiveDict()
+        asset_headers['User-Agent'] = mfo.base_obj.ua.random
+        asset_headers['x-api-key'] = mfo.base_obj.os_api_key
+        asset_response = requests.request("GET", asset_url, headers=asset_headers)
+        asset_base = asset_response.json()['assets'][0]
+        asset_name = asset_base['asset_contract']['name']
+        asset_img_url = asset_base['image_url']
+        asset_owner = asset_base['owner']['address']
+        asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
+        asset_link = asset_base['permalink']
         embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
                                              mfo.base_obj.embed_rgb_color[2])
-        asset_embed = discord.Embed(title='{} {}'.format(name, token_id), url=asset_link, color=embed_color)
-        asset_embed.set_image(url=image_url)
-        asset_embed.description = 'Owner: [{}]({})'.format(owner[0:8], owner_link)
+        asset_embed = discord.Embed(title='{} {}'.format(asset_name, token_id), url=asset_link, color=embed_color)
+        asset_embed.set_image(url=asset_img_url)
+        asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
         await message.channel.send(embed=asset_embed)

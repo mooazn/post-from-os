@@ -156,6 +156,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return True
 
     def download_image(self):  # downloads the image to upload
+        if self.os_obj_to_post.image_url is None:
+            return True
         try:
             img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
             img = open(self.file_name, 'wb')
