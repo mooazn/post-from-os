@@ -160,10 +160,13 @@ async def on_message(message):
     if message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
         await post_to_discord_obj.eth_price(sales_obj, message)
 
-    if message.content.startswith('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
+    elif message.content.startswith('{}gas'.format(BOT_PREFIX)):  # gas tracker
+        await post_to_discord_obj.gas_tracker(sales_obj, message)
+
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
         await post_to_discord_obj.custom_command_1(sales_obj, message)
 
-    if message.content.startswith('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
         await post_to_discord_obj.custom_command_2(sales_obj, message)
 
 
