@@ -1,12 +1,11 @@
 from fake_useragent import UserAgent
-from fp.fp import FreeProxy
+import math
 import requests
-from requests.structures import CaseInsensitiveDict
 import time
 from tinydb import TinyDB, Query
 
 
-# This whole script takes about 24 hours (or more) for a 10k collection. Although that is slow, it's a one time
+# This whole script takes a few minutes to run, should be less than 1 hour. Although that is slow, it's a one time
 # operation for ultra fast operations on getting assets within a collection. What happens when the owner changes?
 # Here's a simple way to replace the previous owner:
 
@@ -16,8 +15,9 @@ from tinydb import TinyDB, Query
 # owner = eval(query[0]['traits'])['owner']
 # prev_address = owner['address']
 # owner['address'] = 'NEW_OWNER'
+# x.update(.....)
 
-# you can change other fields accordingly
+# you can update other fields accordingly
 
 def validate_params(name, count):
     test_coll_url = 'https://api.opensea.io/api/v1/collection/{}'.format(name)
@@ -41,10 +41,11 @@ class ScrapeCollectionTraits:
         resp_variables = self.send_requests_for_variables()
         stats_json = resp_variables[0]
         primary_asset_contracts_json = resp_variables[1]
-        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.total_supply = int(stats_json['total_supply'])
         self.collection_count = max(collection_count, self.total_supply)
         self.contract_address = primary_asset_contracts_json['address']
+        self.os_asset_url = 'https://api.opensea.io/api/v1/assets?asset_contract_address={}&order_direction=' \
+                            'asc&offset={}&limit=50'
         self.start_time = None
         self.end_time = None
         self.iteration_num = 1
@@ -62,35 +63,21 @@ class ScrapeCollectionTraits:
 
     def scrape(self):
         self.start_time = time.time()
-        missed_assets = [-1]
-        while len(missed_assets) != 0:
-            if -1 in missed_assets:
-                missed_assets.remove(-1)
-            assets = range(1, self.collection_count) if self.iteration_num == 1 else missed_assets
-            for asset in assets:
-                asset_trait_exists = True if len(self.db.search(self.db_query.id == asset)) == 1 else False
-                if not asset_trait_exists:
-                    url = "{}{}/{}".format(self.os_asset_url, self.contract_address, asset)
-                    proxies = {
-                        'http': FreeProxy(country_id=['US', 'CA', 'MX', 'BR']).get()
-                    }
-                    asset_headers = CaseInsensitiveDict()
-                    asset_headers['User-Agent'] = self.ua.random
-                    asset_response = requests.request('GET', url, proxies=proxies, headers=asset_headers)
-                    if asset_response.status_code == 200:
-                        self.db.insert({'id': asset, 'asset_json': str(asset_response.json())})
-                        print('Inserted', asset, 'normally')
-                        if asset in missed_assets:
-                            missed_assets.remove(asset)
-                    elif asset_response.status_code == 429:
-                        missed_assets.append(asset)
-                        print('429 encountered on', asset)
-                    else:
-                        print(asset_response.status_code, 'on', asset)
-                else:
-                    print(asset, 'already exists in DB.')
-            print(missed_assets)
-            self.iteration_num += 1
+        for i in range(0, math.ceil(self.collection_count / 50)):
+            url = self.os_asset_url.format(self.contract_address, i * 50)
+            asset_response = requests.request('GET', url)
+            if asset_response.status_code == 200:
+                asset_base = asset_response.json()['assets']
+                for asset in asset_base:
+                    token_id = asset['token_id']
+                    asset_trait_exists = True if len(self.db.search(self.db_query.id == int(token_id))) == 1 else False
+                    if asset_trait_exists:
+                        print(token_id, 'already exists in DB.')
+                        continue
+                    self.db.insert({'id': int(token_id), 'asset_json': str(asset)})
+                    print(token_id, 'inserted into DB.')
+            else:
+                print(asset_response.status_code)
         self.end_time = time.time()
         print('Finished.')
 
