@@ -1,4 +1,4 @@
-from scrape_collection_traits import ScrapeCollectionTraits
+from get_collection_assets import ScrapeCollectionTraits
 
 ex = ScrapeCollectionTraits('Collection Name', 123)
 

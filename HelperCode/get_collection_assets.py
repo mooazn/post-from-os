@@ -5,9 +5,10 @@ import time
 from tinydb import TinyDB, Query
 
 
-# This whole script takes a few minutes to run, should be less than 1 hour. Although that is slow, it's a one time
-# operation for ultra fast operations on getting assets within a collection. What happens when the owner changes?
-# Here's a simple way to replace the previous owner:
+# This whole script takes roughly 1 hour to run for a collection with 10k assets. Although that is slow, it's a one time
+# operation for ultra fast operations on getting assets within a collection. It makes sense, you get a 80 MB file out of
+# it! It could be faster with threads. What happens when the owner changes? Here's a simple way to replace the previous
+# owner:
 
 # x = TinyDB('db.json')
 # xq = Query()
