@@ -16,6 +16,7 @@ listings_channel = -1
 collection_name = ''
 BOT_PREFIX = ''
 commands = []
+commands_desc = []
 
 
 class ManageManager:
@@ -25,7 +26,8 @@ class ManageManager:
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
-        global sales_obj, listings_obj, sales_channel, listings_channel, BOT_PREFIX, collection_name, commands
+        global sales_obj, listings_obj, sales_channel, listings_channel, BOT_PREFIX, collection_name, commands, \
+            commands_desc
         print('Beginning validation of Discord Values File...')
         if not str(self.discord_values).endswith('.txt'):
             raise Exception('Discord values must be a .txt file.')
@@ -109,9 +111,32 @@ class ManageManager:
         test_commands = test_discord_values.readline().strip()
         if test_commands != 'None':
             test_commands = test_commands.split()
-            print('There {} a total of {} custom command(s): {}'.format('is' if len(test_commands) == 1 else 'are',
-                                                                        len(test_commands), test_commands))
-            commands = test_commands
+            index = 0
+            try:
+                while index < len(test_commands):
+                    word = test_commands[index]
+                    if word[0] == '\"':
+                        end_index = index
+                        while test_commands[end_index][-1] != '\"':
+                            end_index += 1
+                        desc = " ".join(test_commands[index:end_index + 1])
+                        commands_desc.append(desc)
+                        index = end_index
+                    else:
+                        commands.append(word)
+                    index += 1
+                if len(commands) != len(commands_desc):
+                    raise Exception('Number of commands do not match number of descriptions.')
+            except Exception as e:  # catch any error
+                print(e)
+                raise Exception('Commands are formatted incorrectly. Please list the command followed by a short '
+                                'description and usage (surrounded by quotes). For example: command \"This command '
+                                'is a cool command. To use, type !command\"')
+            print('There {} a total of {} custom command(s): {}'.format('is' if len(commands) == 1 else 'are',
+                                                                        len(commands), commands))
+            print(commands_desc)
+            commands.append('eth')
+            commands.append('gas')
         else:
             print('No custom commands supplied.')
         test_discord_values.close()
@@ -153,20 +178,29 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    global BOT_PREFIX, collection_name, commands
+    global BOT_PREFIX, collection_name, commands, commands_desc
     if message.author == client.user:
         return
 
-    if message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
+    if message.content == ('{}help'.format(BOT_PREFIX)):  # help command
+        help_help = 'Default command: \'help\'. \"This command.\"\n\n'
+        eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
+        gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
+        final_message = "```" + help_help + eth_help + gas_help
+        for i in range(0, len(commands_desc)):
+            final_message += 'Custom command: \'{}\'. {}'.format(commands[i], commands_desc[i]) + '\n\n'
+        await message.channel.send(final_message + "```")
+
+    elif message.content == ('{}eth'.format(BOT_PREFIX)):  # eth price
         await post_to_discord_obj.eth_price(sales_obj, message)
 
-    elif message.content.startswith('{}gas'.format(BOT_PREFIX)):  # gas tracker
+    elif message.content == ('{}gas'.format(BOT_PREFIX)):  # gas tracker
         await post_to_discord_obj.gas_tracker(sales_obj, message)
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
+    elif message.content == ('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
         await post_to_discord_obj.custom_command_1(sales_obj, message)
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
+    elif message.content == ('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
         await post_to_discord_obj.custom_command_2(sales_obj, message)
 
 

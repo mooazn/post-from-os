@@ -11,6 +11,8 @@ ex = ManageManager('Discord Values .txt')
 # Discord embed icon URL or None
 # RGB values r g b or None
 # OS API Key or None
+# Bot prefix or None
+# Command Description (surrounded with double quotes)
 
 # for example:
 # -----discord_values.txt-----
@@ -20,6 +22,8 @@ ex = ManageManager('Discord Values .txt')
 # image.jpg OR image.jpeg OR image.png
 # 0 0 0
 # OS API key
+# ! or ? or >> or... etc.
+# example "this is an example command"
 
 # example instantiator:
 mm = ManageManager('discord_values_yachts.txt')

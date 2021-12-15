@@ -10,13 +10,15 @@ from tinydb import TinyDB, Query
 # it! It could be faster with threads. What happens when the owner changes? Here's a simple way to replace the previous
 # owner:
 
+# ID = 10
 # x = TinyDB('db.json')
 # xq = Query()
 # query = x.search(xq.id == ID)
-# owner = eval(query[0]['traits'])['owner']
+# base = eval(query[0]['asset_json'])
+# owner = base['owner']
 # prev_address = owner['address']
-# owner['address'] = 'NEW_OWNER'
-# x.update(.....)
+# owner['address'] = 'NEW_ADDRESS'
+# x.update({'asset_json': str(base)}, xq.id == ID)
 
 # you can update other fields accordingly
 

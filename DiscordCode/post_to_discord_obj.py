@@ -269,8 +269,9 @@ async def gas_tracker(mfo, message):
     slow_gas = gas['SafeGasPrice']
     avg_gas = gas['ProposeGasPrice']
     fast_gas = gas['FastGasPrice']
-    gas_embed = discord.Embed(title='Current gas prices')
-    gas_embed.description = 'Slow: {} Gwei\n\nAverage: {} Gwei\n\nFast: {} Gwei'.format(slow_gas, avg_gas, fast_gas)
+    gas_embed = discord.Embed(title=':fuelpump: **Current Gas Prices**\n')
+    gas_embed.description = ':zap: **Fast**\n{} Gwei\n\n:person_walking: **Average**\n{} Gwei\n\n:turtle: ' \
+                            '**Slow**\n{} Gwei'.format(fast_gas, avg_gas, slow_gas)
     await message.channel.send(embed=gas_embed)
 
 
