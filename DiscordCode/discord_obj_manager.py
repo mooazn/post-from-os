@@ -10,7 +10,8 @@ ex = ManageManager('Discord Values .txt')
 # collection name here. can be found in the URL of the homepage of a collection.
 # Discord embed icon URL or None
 # RGB values r g b or None
-# OS API Key or None
+# OS API Key
+# EtherScan API Key
 # Bot prefix or None
 # Command Description (surrounded with double quotes)
 
@@ -22,6 +23,7 @@ ex = ManageManager('Discord Values .txt')
 # image.jpg OR image.jpeg OR image.png
 # 0 0 0
 # OS API key
+# EtherScan API Key
 # ! or ? or >> or... etc.
 # example "this is an example command"
 

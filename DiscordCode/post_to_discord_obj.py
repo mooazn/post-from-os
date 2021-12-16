@@ -4,6 +4,8 @@ from discord.embeds import EmptyEmbed
 from enum import Enum
 from fake_useragent import UserAgent
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from requests.structures import CaseInsensitiveDict
 import time
 from tinydb import TinyDB, Query
@@ -61,7 +63,7 @@ class _OpenSeaTransactionObject:
 
 
 class _PostFromOpenSeaDiscord:
-    def __init__(self, values, trait_db=None):
+    def __init__(self, values):
         self.collection_name = values[0][0]
         self.contract_address = values[1][0]
         self.embed_icon_url = values[2][0]
@@ -69,7 +71,7 @@ class _PostFromOpenSeaDiscord:
         self.os_api_key = values[4][0]
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
         self.eth_price_url = 'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD'
-        self.gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle'
+        self.gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'
         self.response = None
         self.os_obj_to_post = None
         self.tx_type = None
@@ -78,10 +80,6 @@ class _PostFromOpenSeaDiscord:
         self.id_db = TinyDB(self.collection_name + '_listing_id_discord_db.json')
         self.id_query = Query()
         self.tx_queue = []
-        self.trait_db = None
-        if trait_db is not None:
-            self.trait_db = TinyDB(trait_db)
-            self.trait_query = Query()
         self.limit = 5
         self.ua = UserAgent()
 
@@ -101,7 +99,12 @@ class _PostFromOpenSeaDiscord:
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            self.response = requests.request('GET', self.os_events_url, headers=headers, params=querystring)
+            session = requests.Session()
+            retry = Retry(connect=3, backoff_factor=5, total=3)
+            adapter = HTTPAdapter(max_retries=retry)
+            session.mount('http://', adapter)
+            session.mount('https://', adapter)
+            self.response = session.get(self.os_events_url, headers=headers, params=querystring)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -200,9 +203,6 @@ class ManageFlowObj:
     def create(self, values):
         self.base_obj = _PostFromOpenSeaDiscord(values)
 
-    def create_with_traits(self, values, trait_db):
-        self.base_obj = _PostFromOpenSeaDiscord(values, trait_db)
-
     def check_os_api_status(self, tx_type):
         self.date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
         self.tx_type = tx_type
@@ -246,21 +246,8 @@ async def eth_price(mfo, message):
     await message.channel.send('${}'.format(eth_price_usd))
 
 
-guild_gas_time_local_map = {}
-
-
-async def gas_tracker(mfo, message):
-    # TODO:
-    #  replace current solution with Etherscan API key - no rate limit.
-    guild_id = message.guild.id
-    cur_epoch = int(time.time())
-    if guild_id not in guild_gas_time_local_map:
-        guild_gas_time_local_map[guild_id] = cur_epoch
-    elif cur_epoch - guild_gas_time_local_map[guild_id] <= 10:
-        await message.channel.send('Please wait 10 seconds before using this command again.')
-        return
-    guild_gas_time_local_map[guild_id] = cur_epoch
-    gas_tracker_url = mfo.base_obj.gas_tracker_url
+async def gas_tracker(mfo, message, e_scan_key):
+    gas_tracker_url = mfo.base_obj.gas_tracker_url.format(e_scan_key)
     gas_tracker_request = requests.request('GET', gas_tracker_url)
     if gas_tracker_request.status_code != 200:
         await message.channel.send('Sorry, API to fetch gas might be down right now.')
@@ -303,33 +290,34 @@ async def custom_command_2(mfo, message):
         await message.channel.send('Please wait 5 seconds before using this command again.')
         return
     custom_command_2_time_local_map[sender] = cur_epoch
-    if mfo.base_obj.trait_db is not None:
-        try:
-            token_id = int(message.content.split()[1])
-        except ValueError:
-            return
-        asset_url = "https://api.opensea.io/api/v1/assets?token_ids={}" \
-                    "&asset_contract_address={}".format(token_id, mfo.base_obj.contract_address)
-        asset_headers = CaseInsensitiveDict()
-        asset_headers['User-Agent'] = mfo.base_obj.ua.random
-        asset_headers['x-api-key'] = mfo.base_obj.os_api_key
-        asset_request = requests.request("GET", asset_url, headers=asset_headers)
-        if asset_request.status_code != 200:
-            await message.channel.send('Sorry, Opensea API might be down right now.')
-            return
-        try:
-            asset_base = asset_request.json()['assets'][0]
-        except IndexError:
-            await message.channel.send('Asset with Token ID = {} does not exist.'.format(token_id))
-            return
-        asset_name = asset_base['name']
-        asset_img_url = asset_base['image_url']
-        asset_owner = asset_base['owner']['address']
-        asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
-        asset_link = asset_base['permalink']
-        embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
-                                             mfo.base_obj.embed_rgb_color[2])
-        asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
-        asset_embed.set_image(url=asset_img_url)
-        asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
-        await message.channel.send(embed=asset_embed)
+    try:
+        token_id = int(message.content.split()[1])
+    except ValueError:
+        return
+    if token_id < 0:
+        return
+    asset_url = "https://api.opensea.io/api/v1/assets?token_ids={}" \
+                "&asset_contract_address={}".format(token_id, mfo.base_obj.contract_address)
+    asset_headers = CaseInsensitiveDict()
+    asset_headers['User-Agent'] = mfo.base_obj.ua.random
+    asset_headers['x-api-key'] = mfo.base_obj.os_api_key
+    asset_request = requests.request("GET", asset_url, headers=asset_headers)
+    if asset_request.status_code != 200:
+        await message.channel.send('Sorry, Opensea API might be down right now.')
+        return
+    try:
+        asset_base = asset_request.json()['assets'][0]
+    except IndexError:
+        await message.channel.send('Asset with Token ID = {} does not exist.'.format(token_id))
+        return
+    asset_name = asset_base['name']
+    asset_img_url = asset_base['image_url']
+    asset_owner = asset_base['owner']['address']
+    asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
+    asset_link = asset_base['permalink']
+    embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
+                                         mfo.base_obj.embed_rgb_color[2])
+    asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
+    asset_embed.set_image(url=asset_img_url)
+    asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
+    await message.channel.send(embed=asset_embed)

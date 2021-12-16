@@ -5,6 +5,8 @@ from fake_useragent import UserAgent  # noqa: E402
 from HelperCode import find_file  # noqa: E402
 from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
+from requests.adapters import HTTPAdapter  # noqa: E402
+from requests.packages.urllib3.util.retry import Retry  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
 import time  # noqa: E402
 from tinydb import TinyDB, Query  # noqa: E402
@@ -105,7 +107,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            self.response = requests.request('GET', self.os_events_url, headers=headers, params=query_strings)
+            session = requests.Session()
+            retry = Retry(connect=3, backoff_factor=5, total=3)
+            adapter = HTTPAdapter(max_retries=retry)
+            session.mount('http://', adapter)
+            session.mount('https://', adapter)
+            self.response = session.get(self.os_events_url, headers=headers, params=query_strings)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -283,7 +290,6 @@ class ManageFlowObj:  # Main class which does all of the operations
     def __init__(self, twitter_values_file, trait_db_name=None):
         self.twitter_values_file = twitter_values_file
         self.trait_db_name = trait_db_name
-        self.iteration = 1
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
@@ -437,5 +443,4 @@ class ManageFlowObj:  # Main class which does all of the operations
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            # self.count_db.insert({'iteration': self.iteration})
-            # self.iteration += 1
+            # self.count_db.insert({'iteration': str(date_time_now)})

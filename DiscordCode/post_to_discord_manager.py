@@ -1,52 +1,48 @@
-import sys
-sys.path.append('../')
-import asyncio  # noqa: E402
-import discord  # noqa: E402
-from HelperCode import find_file  # noqa: E402
-import post_to_discord_obj  # noqa: E402
-from post_to_discord_obj import ManageFlowObj, EventType  # noqa: E402
-import requests  # noqa: E402
-from requests.structures import CaseInsensitiveDict  # noqa: E402
+import asyncio
+import discord
+import post_to_discord_obj
+from post_to_discord_obj import ManageFlowObj, EventType
+import requests
+from requests.structures import CaseInsensitiveDict
 
-client = discord.Client()
-sales_obj = ManageFlowObj()
-sales_channel = -1
-listings_obj = ManageFlowObj()
-listings_channel = -1
-collection_name = ''
+CLIENT = discord.Client()
+SALES_OBJ = ManageFlowObj()
+SALES_CHANNEL = -1
+LISTINGS_OBJ = ManageFlowObj()
+LISTINGS_CHANNEL = -1
+E_SCAN_KEY = ''
 BOT_PREFIX = ''
-commands = []
-commands_desc = []
+COMMANDS = []
+COMMANDS_DESC = []
+HELP_MESSAGE = ''
 
 
 class ManageManager:
-    def __init__(self, discord_values_file, trait_db=None):
+    def __init__(self, discord_values_file):
         self.discord_values = discord_values_file
-        self.trait_db = trait_db
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
-        global sales_obj, listings_obj, sales_channel, listings_channel, BOT_PREFIX, collection_name, commands, \
-            commands_desc
+        global SALES_OBJ, LISTINGS_OBJ, SALES_CHANNEL, LISTINGS_CHANNEL, BOT_PREFIX, COMMANDS, COMMANDS_DESC, E_SCAN_KEY
         print('Beginning validation of Discord Values File...')
         if not str(self.discord_values).endswith('.txt'):
             raise Exception('Discord values must be a .txt file.')
         with open(self.discord_values) as dv:
-            if len(dv.readlines()) != 8:
+            if len(dv.readlines()) != 9:
                 raise Exception('The Discord Values file must be formatted correctly.')
         test_discord_values = open(self.discord_values, 'r')
         discord_token = test_discord_values.readline().strip()
         channels = test_discord_values.readline().strip().split()
         try:
-            sales_channel = int(channels[0])
+            SALES_CHANNEL = int(channels[0])
             if len(channels) > 1:
-                listings_channel = int(channels[1])
+                LISTINGS_CHANNEL = int(channels[1])
         except Exception as e:
             test_discord_values.close()
             print(e)
             raise Exception('Channels are not valid.')
         print('Channels validated.\n  Sales channel: {}\n  Listings Channel: {}'.
-              format(sales_channel, listings_channel if listings_channel != -1 else 'No listings channel'))
+              format(SALES_CHANNEL, LISTINGS_CHANNEL if LISTINGS_CHANNEL != -1 else 'No listings channel'))
         collection_name_test = test_discord_values.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
         test_response = requests.request('GET', test_collection_name_url)
@@ -54,7 +50,6 @@ class ManageManager:
             collection_json = test_response.json()['collection']
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
             contract_address = primary_asset_contracts_json['address']
-            collection_name = collection_name_test
         else:
             test_discord_values.close()
             raise Exception('The provided collection name does not exist.')
@@ -89,18 +84,23 @@ class ManageManager:
         else:
             print('Skipping RGB Values and setting to default...')
         test_os_api_key = test_discord_values.readline().strip()
-        if test_os_api_key != 'None':
-            test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
-            test_os_headers = CaseInsensitiveDict()
-            test_os_headers['Accept'] = 'application/json'
-            test_os_headers['x-api-key'] = test_os_api_key
-            test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
-            if test_os_response.status_code != 200:
-                test_discord_values.close()
-                raise Exception('Invalid OpenSea API key supplied.')
-            print('OpenSea Key validated...')
-        else:
-            print('No OpenSea API Key supplied...')
+        test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = test_os_api_key
+        test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
+        if test_os_response.status_code != 200:
+            test_discord_values.close()
+            raise Exception('Invalid OpenSea API key supplied.')
+        print('OpenSea Key validated...')
+        test_ether_scan_key = test_discord_values.readline().strip()
+        test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
+            format(test_ether_scan_key)
+        test_ether_scan_response = requests.request('GET', test_ether_scan_url)
+        if test_ether_scan_response.json()['message'] == 'NOTOK':
+            raise Exception('Invalid Ether Scan key.')
+        E_SCAN_KEY = test_ether_scan_key
+        print('Ether Scan key validated...')
         test_prefix = test_discord_values.readline().strip()
         if test_prefix == 'None':
             BOT_PREFIX = '!'
@@ -120,50 +120,34 @@ class ManageManager:
                         while test_commands[end_index][-1] != '\"':
                             end_index += 1
                         desc = " ".join(test_commands[index:end_index + 1])
-                        commands_desc.append(desc)
+                        COMMANDS_DESC.append(desc)
                         index = end_index
                     else:
-                        commands.append(word)
+                        COMMANDS.append(word)
                     index += 1
-                if len(commands) != len(commands_desc):
+                if len(COMMANDS) != len(COMMANDS_DESC):
                     raise Exception('Number of commands do not match number of descriptions.')
             except Exception as e:  # catch any error
                 print(e)
                 raise Exception('Commands are formatted incorrectly. Please list the command followed by a short '
                                 'description and usage (surrounded by quotes). For example: command \"This command '
                                 'is a cool command. To use, type !command\"')
-            print('There {} a total of {} custom command(s): {}'.format('is' if len(commands) == 1 else 'are',
-                                                                        len(commands), commands))
-            print(commands_desc)
-            commands.append('eth')
-            commands.append('gas')
+            print('There {} a total of {} custom command(s): {}'.format('is' if len(COMMANDS) == 1 else 'are',
+                                                                        len(COMMANDS), COMMANDS))
+            print('Custom commands and custom command descriptions successfully validated...')
         else:
             print('No custom commands supplied.')
         test_discord_values.close()
         print('Validation of Discord Values .txt complete. No errors found...')
-        trait_db_location = None
-        if self.trait_db is not None:
-            if not str(self.trait_db).lower().endswith('.json'):
-                raise Exception('Trait DB must end with a .json file extension.')
-            trait_db_location = find_file.find(self.trait_db)
-            if trait_db_location is None:
-                raise Exception('Trait DB .json not found. Either type the name correctly or remove the parameter.')
-            print('Validation of Trait DB Name .json complete. No errors found...')
-        else:
-            print('Skipping Trait DB Name .json. No file was provided.')
         print('All files are validated. Beginning program...')
-        if self.trait_db is None:
-            sales_obj.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
-                              [test_os_api_key]])
-        else:
-            sales_obj.create_with_traits([[collection_name_test], [contract_address], [test_discord_embed_icon],
-                                          [r, g, b], [test_os_api_key]], trait_db_location)
-        if listings_channel != -1:
-            listings_obj.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
+        SALES_OBJ.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
+                          [test_os_api_key]])
+        CLIENT.loop.create_task(process_sales())
+        CLIENT.loop.create_task(update_gas_presence())
+        if LISTINGS_CHANNEL != -1:
+            LISTINGS_OBJ.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
                                 [test_os_api_key]])
-        client.loop.create_task(process_sales())
-        if listings_channel != -1:
-            client.loop.create_task(process_listings())
+            CLIENT.loop.create_task(process_listings())
         try:
             print('Beginning program...')
             run(discord_token)
@@ -171,52 +155,55 @@ class ManageManager:
             raise Exception('Invalid Discord token supplied.')
 
 
-@client.event
+@CLIENT.event
 async def on_ready():
-    print('Logged in...', flush=True)
+    global HELP_MESSAGE, COMMANDS, COMMANDS_DESC
+    help_help = 'Default command: \'help\'. \"This command.\"\n\n'
+    eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
+    gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
+    HELP_MESSAGE = "```" + help_help + eth_help + gas_help
+    for i in range(0, len(COMMANDS_DESC)):
+        HELP_MESSAGE += 'Custom command: \'{}\'. {}'.format(COMMANDS[i], COMMANDS_DESC[i]) + '\n\n'
+    HELP_MESSAGE += '```'
+    print('Logging in and setting up help command...', flush=True)
 
 
-@client.event
+@CLIENT.event
 async def on_message(message):
-    global BOT_PREFIX, collection_name, commands, commands_desc
-    if message.author == client.user:
+    global BOT_PREFIX, COMMANDS, HELP_MESSAGE, E_SCAN_KEY
+    if message.author == CLIENT.user:
         return
 
-    if message.content == ('{}help'.format(BOT_PREFIX)):  # help command
-        help_help = 'Default command: \'help\'. \"This command.\"\n\n'
-        eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
-        gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
-        final_message = "```" + help_help + eth_help + gas_help
-        for i in range(0, len(commands_desc)):
-            final_message += 'Custom command: \'{}\'. {}'.format(commands[i], commands_desc[i]) + '\n\n'
-        await message.channel.send(final_message + "```")
+    if message.content.startswith('{}help'.format(BOT_PREFIX)):  # help command
+        await message.channel.send(HELP_MESSAGE)
 
-    elif message.content == ('{}eth'.format(BOT_PREFIX)):  # eth price
-        await post_to_discord_obj.eth_price(sales_obj, message)
+    elif message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
+        await post_to_discord_obj.eth_price(SALES_OBJ, message)
 
-    elif message.content == ('{}gas'.format(BOT_PREFIX)):  # gas tracker
-        await post_to_discord_obj.gas_tracker(sales_obj, message)
+    elif message.content.startswith('{}gas'.format(BOT_PREFIX)):  # gas tracker
+        await post_to_discord_obj.gas_tracker(SALES_OBJ, message, E_SCAN_KEY)
 
-    elif message.content == ('{}{}'.format(BOT_PREFIX, commands[0])):  # custom command 1
-        await post_to_discord_obj.custom_command_1(sales_obj, message)
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[0])):  # custom command 1
+        await post_to_discord_obj.custom_command_1(SALES_OBJ, message)
 
-    elif message.content == ('{}{}'.format(BOT_PREFIX, commands[1])):  # custom command 2
-        await post_to_discord_obj.custom_command_2(sales_obj, message)
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[1])):  # custom command 2
+        await post_to_discord_obj.custom_command_2(SALES_OBJ, message)
 
 
 async def process_sales():
-    await client.wait_until_ready()
-    channel = client.get_channel(sales_channel)
-    while not client.is_closed():
-        status = sales_obj.check_os_api_status(EventType.SALE.value)
+    global CLIENT, SALES_OBJ, SALES_CHANNEL
+    await CLIENT.wait_until_ready()
+    channel = CLIENT.get_channel(SALES_CHANNEL)
+    while not CLIENT.is_closed():
+        status = SALES_OBJ.check_os_api_status(EventType.SALE.value)
         if not status:
             await asyncio.sleep(30)
             continue
-        exists = sales_obj.check_if_new_post_exists()
+        exists = SALES_OBJ.check_if_new_post_exists()
         if not exists:
             await asyncio.sleep(5)
             continue
-        res = await post_to_discord_obj.try_to_post_embed_to_discord(sales_obj, channel)
+        res = await post_to_discord_obj.try_to_post_embed_to_discord(SALES_OBJ, channel)
         if res:
             await asyncio.sleep(5)
         else:
@@ -224,23 +211,45 @@ async def process_sales():
 
 
 async def process_listings():
-    await client.wait_until_ready()
-    channel = client.get_channel(listings_channel)
-    while not client.is_closed():
-        status = listings_obj.check_os_api_status(EventType.LISTING.value)
+    global CLIENT, LISTINGS_OBJ, LISTINGS_CHANNEL
+    await CLIENT.wait_until_ready()
+    channel = CLIENT.get_channel(LISTINGS_CHANNEL)
+    while not CLIENT.is_closed():
+        status = LISTINGS_OBJ.check_os_api_status(EventType.LISTING.value)
         if not status:
             await asyncio.sleep(30)
             continue
-        exists = listings_obj.check_if_new_post_exists()
+        exists = LISTINGS_OBJ.check_if_new_post_exists()
         if not exists:
             await asyncio.sleep(5)
             continue
-        res = await post_to_discord_obj.try_to_post_embed_to_discord(listings_obj, channel)
+        res = await post_to_discord_obj.try_to_post_embed_to_discord(LISTINGS_OBJ, channel)
         if res:
             await asyncio.sleep(5)
         else:
             await asyncio.sleep(10)
 
 
+async def update_gas_presence():
+    global CLIENT, BOT_PREFIX, E_SCAN_KEY
+    await CLIENT.wait_until_ready()
+    while not CLIENT.is_closed():
+        gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'.format(E_SCAN_KEY)
+        gas_tracker_request = requests.request('GET', gas_tracker_url)
+        if gas_tracker_request.status_code != 200:
+            print(gas_tracker_request.text)
+            await asyncio.sleep(30)
+            continue
+        gas = gas_tracker_request.json()['result']
+        slow_gas = gas['SafeGasPrice']
+        avg_gas = gas['ProposeGasPrice']
+        fast_gas = gas['FastGasPrice']
+        await CLIENT.change_presence(activity=discord.Game(
+            name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
+        print('Gas updated.', flush=True)
+        await asyncio.sleep(30)
+
+
 def run(discord_token):
-    client.run(discord_token)
+    global CLIENT
+    CLIENT.run(discord_token)
