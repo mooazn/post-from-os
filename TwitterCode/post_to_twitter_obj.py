@@ -246,16 +246,18 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_usd_price = eth_price_base['ethusd']
                 usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                 if tx_eth_value != 0.0:
-                    name = '{} #{}'.format(self.ether_scan_name, token_id)
-                    asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
-                    rare_trait_list = []
-                    if self.trait_db_name is not None:
-                        rare_trait_list = self.create_rare_trait_list(token_id)
-                    self.tx_db.insert({'tx': tx_hash})
-                    transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
-                                                            rare_trait_list, self.twitter_tags)
-                    transaction.create_twitter_caption()
-                    self.tx_queue.append(transaction)
+                    input_type = tx_details_response_base['input']
+                    if input_type.startswith('0xab834bab'):  # this is an atomic match! (check ether scan logs)
+                        name = '{} #{}'.format(self.ether_scan_name, token_id)
+                        asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
+                        rare_trait_list = []
+                        if self.trait_db_name is not None:
+                            rare_trait_list = self.create_rare_trait_list(token_id)
+                        self.tx_db.insert({'tx': tx_hash})
+                        transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
+                                                                rare_trait_list, self.twitter_tags)
+                        transaction.create_twitter_caption()
+                        self.tx_queue.append(transaction)
             return self.process_queue()
         except Exception as e:
             print(e, flush=True)
