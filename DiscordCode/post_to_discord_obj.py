@@ -239,82 +239,94 @@ async def eth_price(mfo, message):
         eth_price_usd = eth_price_request.json()['USD']
         await message.channel.send('${}'.format(eth_price_usd))
     except Exception as e:
-        print(e)
+        print(e, flush=True)
         return
 
 
 async def gas_tracker(mfo, message, e_scan_key):
-    gas_tracker_url = mfo.base_obj.gas_tracker_url.format(e_scan_key)
-    gas_tracker_request = requests.get(gas_tracker_url, timeout=1)
-    if gas_tracker_request.status_code != 200:
-        await message.channel.send('Sorry, API to fetch gas might be down right now.')
+    try:
+        gas_tracker_url = mfo.base_obj.gas_tracker_url.format(e_scan_key)
+        gas_tracker_request = requests.get(gas_tracker_url, timeout=1)
+        if gas_tracker_request.status_code != 200:
+            await message.channel.send('Sorry, API to fetch gas might be down right now.')
+            return
+        gas = gas_tracker_request.json()['result']
+        slow_gas = gas['SafeGasPrice']
+        avg_gas = gas['ProposeGasPrice']
+        fast_gas = gas['FastGasPrice']
+        gas_embed = discord.Embed(title=':fuelpump: **Current Gas Prices**\n')
+        gas_embed.description = ':zap: **Fast**\n{} Gwei\n\n:person_walking: **Average**\n{} Gwei\n\n:turtle: ' \
+                                '**Slow**\n{} Gwei'.format(fast_gas, avg_gas, slow_gas)
+        await message.channel.send(embed=gas_embed)
+    except Exception as e:
+        print(e, flush=True)
         return
-    gas = gas_tracker_request.json()['result']
-    slow_gas = gas['SafeGasPrice']
-    avg_gas = gas['ProposeGasPrice']
-    fast_gas = gas['FastGasPrice']
-    gas_embed = discord.Embed(title=':fuelpump: **Current Gas Prices**\n')
-    gas_embed.description = ':zap: **Fast**\n{} Gwei\n\n:person_walking: **Average**\n{} Gwei\n\n:turtle: ' \
-                            '**Slow**\n{} Gwei'.format(fast_gas, avg_gas, slow_gas)
-    await message.channel.send(embed=gas_embed)
 
 
 async def custom_command_1(mfo, message):
-    stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(mfo.base_obj.collection_name)
-    stats_request = requests.get(stats_url, timeout=1)
-    if stats_request.status_code != 200:
-        await message.channel.send('Sorry, Opensea API might be down right now.')
+    try:
+        stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(mfo.base_obj.collection_name)
+        stats_request = requests.get(stats_url, timeout=1)
+        if stats_request.status_code != 200:
+            await message.channel.send('Sorry, Opensea API might be down right now.')
+            return
+        floor_price_eth = stats_request.json()['stats']['floor_price']
+        eth_price_url = mfo.base_obj.eth_price_url
+        eth_price_request = requests.get(eth_price_url, timeout=1)
+        eth_price_usd = eth_price_request.json()['USD']
+        floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
+        await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the'
+                                   ' actual floor price, please visit the collection on Opensea: '
+                                   'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd,
+                                                                             mfo.base_obj.collection_name))
+    except Exception as e:
+        print(e, flush=True)
         return
-    floor_price_eth = stats_request.json()['stats']['floor_price']
-    eth_price_url = mfo.base_obj.eth_price_url
-    eth_price_request = requests.get(eth_price_url, timeout=1)
-    eth_price_usd = eth_price_request.json()['USD']
-    floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
-    await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the '
-                               'actual floor price, please visit the collection on Opensea: '
-                               'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd,
-                                                                         mfo.base_obj.collection_name))
 
 custom_command_2_time_local_map = {}
 
 
 async def custom_command_2(mfo, message):
-    sender = message.author.id
-    cur_epoch = int(time.time())
-    if sender not in custom_command_2_time_local_map:
+    try:
+        sender = message.author.id
+        cur_epoch = int(time.time())
+        if sender not in custom_command_2_time_local_map:
+            custom_command_2_time_local_map[sender] = cur_epoch
+        elif cur_epoch - custom_command_2_time_local_map[sender] <= 5:
+            await message.channel.send('Please wait 5 seconds before using this command again.')
+            return
         custom_command_2_time_local_map[sender] = cur_epoch
-    elif cur_epoch - custom_command_2_time_local_map[sender] <= 5:
-        await message.channel.send('Please wait 5 seconds before using this command again.')
+        try:
+            token_id = int(message.content.split()[1])
+        except ValueError:
+            return
+        if token_id < 0:
+            return
+        asset_url = 'https://api.opensea.io/api/v1/assets?token_ids={}&asset_contract_address={}'\
+            .format(token_id, mfo.base_obj.contract_address)
+        asset_headers = CaseInsensitiveDict()
+        asset_headers['User-Agent'] = mfo.base_obj.ua.random
+        asset_headers['x-api-key'] = mfo.base_obj.os_api_key
+        asset_request = requests.get(asset_url, headers=asset_headers, timeout=1)
+        if asset_request.status_code != 200:
+            await message.channel.send('Sorry, Opensea API might be down right now.')
+            return
+        try:
+            asset_base = asset_request.json()['assets'][0]
+        except IndexError:
+            await message.channel.send('Asset with Token ID = {} does not exist.'.format(token_id))
+            return
+        asset_name = asset_base['name']
+        asset_img_url = asset_base['image_url']
+        asset_owner = asset_base['owner']['address']
+        asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
+        asset_link = asset_base['permalink']
+        embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
+                                             mfo.base_obj.embed_rgb_color[2])
+        asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
+        asset_embed.set_image(url=asset_img_url)
+        asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
+        await message.channel.send(embed=asset_embed)
+    except Exception as e:
+        print(e, flush=True)
         return
-    custom_command_2_time_local_map[sender] = cur_epoch
-    try:
-        token_id = int(message.content.split()[1])
-    except ValueError:
-        return
-    if token_id < 0:
-        return
-    asset_url = 'https://api.opensea.io/api/v1/assets?token_ids={}&asset_contract_address={}'\
-        .format(token_id, mfo.base_obj.contract_address)
-    asset_headers = CaseInsensitiveDict()
-    asset_headers['User-Agent'] = mfo.base_obj.ua.random
-    asset_headers['x-api-key'] = mfo.base_obj.os_api_key
-    asset_request = requests.get(asset_url, headers=asset_headers, timeout=1)
-    if asset_request.status_code != 200:
-        await message.channel.send('Sorry, Opensea API might be down right now.')
-        return
-    try:
-        asset_base = asset_request.json()['assets'][0]
-    except IndexError:
-        await message.channel.send('Asset with Token ID = {} does not exist.'.format(token_id))
-        return
-    asset_name = asset_base['name']
-    asset_img_url = asset_base['image_url']
-    asset_owner = asset_base['owner']['address']
-    asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
-    asset_link = asset_base['permalink']
-    embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
-                                         mfo.base_obj.embed_rgb_color[2])
-    asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
-    asset_embed.set_image(url=asset_img_url)
-    asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
-    await message.channel.send(embed=asset_embed)
