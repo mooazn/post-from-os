@@ -45,7 +45,7 @@ class ManageManager:
               format(SALES_CHANNEL, LISTINGS_CHANNEL if LISTINGS_CHANNEL != -1 else 'No listings channel'))
         collection_name_test = test_discord_values.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.request('GET', test_collection_name_url)
+        test_response = requests.get(test_collection_name_url, timeout=1.5)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
@@ -84,11 +84,11 @@ class ManageManager:
         else:
             print('Skipping RGB Values and setting to default...')
         test_os_api_key = test_discord_values.readline().strip()
-        test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
         test_os_headers = CaseInsensitiveDict()
         test_os_headers['Accept'] = 'application/json'
         test_os_headers['x-api-key'] = test_os_api_key
-        test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
         if test_os_response.status_code != 200:
             test_discord_values.close()
             raise Exception('Invalid OpenSea API key supplied.')
@@ -96,7 +96,7 @@ class ManageManager:
         test_ether_scan_key = test_discord_values.readline().strip()
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
             format(test_ether_scan_key)
-        test_ether_scan_response = requests.request('GET', test_ether_scan_url)
+        test_ether_scan_response = requests.get(test_ether_scan_url, timeout=1)
         if test_ether_scan_response.json()['message'] == 'NOTOK':
             raise Exception('Invalid Ether Scan key.')
         E_SCAN_KEY = test_ether_scan_key
@@ -119,7 +119,7 @@ class ManageManager:
                         end_index = index
                         while test_commands[end_index][-1] != '\"':
                             end_index += 1
-                        desc = " ".join(test_commands[index:end_index + 1])
+                        desc = ' '.join(test_commands[index:end_index + 1])
                         COMMANDS_DESC.append(desc)
                         index = end_index
                     else:
@@ -161,7 +161,7 @@ async def on_ready():
     help_help = 'Default command: \'help\'. \"This command.\"\n\n'
     eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
     gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
-    HELP_MESSAGE = "```" + help_help + eth_help + gas_help
+    HELP_MESSAGE = '```' + help_help + eth_help + gas_help
     for i in range(0, len(COMMANDS_DESC)):
         HELP_MESSAGE += 'Custom command: \'{}\'. {}'.format(COMMANDS[i], COMMANDS_DESC[i]) + '\n\n'
     HELP_MESSAGE += '```'
@@ -235,19 +235,19 @@ async def update_gas_presence():
     await CLIENT.wait_until_ready()
     while not CLIENT.is_closed():
         gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'.format(E_SCAN_KEY)
-        gas_tracker_request = requests.request('GET', gas_tracker_url)
-        if gas_tracker_request.status_code != 200:
-            print(gas_tracker_request.text)
+        try:
+            gas_tracker_request = requests.get(gas_tracker_url, timeout=2)
+            gas = gas_tracker_request.json()['result']
+            slow_gas = gas['SafeGasPrice']
+            avg_gas = gas['ProposeGasPrice']
+            fast_gas = gas['FastGasPrice']
+            await CLIENT.change_presence(activity=discord.Game(
+                name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
+            print('Gas updated.', flush=True)
             await asyncio.sleep(30)
-            continue
-        gas = gas_tracker_request.json()['result']
-        slow_gas = gas['SafeGasPrice']
-        avg_gas = gas['ProposeGasPrice']
-        fast_gas = gas['FastGasPrice']
-        await CLIENT.change_presence(activity=discord.Game(
-            name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
-        print('Gas updated.', flush=True)
-        await asyncio.sleep(30)
+        except Exception as e:
+            print(e)
+            await asyncio.sleep(30)
 
 
 def run(discord_token):

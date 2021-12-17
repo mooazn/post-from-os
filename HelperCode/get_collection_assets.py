@@ -24,7 +24,7 @@ from tinydb import TinyDB, Query
 
 def validate_params(name, count):
     test_coll_url = 'https://api.opensea.io/api/v1/collection/{}'.format(name)
-    test_coll_response = requests.request("GET", test_coll_url)
+    test_coll_response = requests.get(test_coll_url)
     if test_coll_response.status_code != 200:
         raise Exception('Invalid collection name.')
     print('Collection name validated...')
@@ -58,7 +58,7 @@ class ScrapeCollectionTraits:
 
     def send_requests_for_variables(self):
         collection_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
-        collection_response = requests.request("GET", collection_url)
+        collection_response = requests.get(collection_url)
         collection_json = collection_response.json()['collection']
         stats_json = collection_json['stats']
         primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]
@@ -68,7 +68,7 @@ class ScrapeCollectionTraits:
         self.start_time = time.time()
         for i in range(0, math.ceil(self.collection_count / 50)):
             url = self.os_asset_url.format(self.contract_address, i * 50)
-            asset_response = requests.request('GET', url)
+            asset_response = requests.get(url)
             if asset_response.status_code == 200:
                 asset_base = asset_response.json()['assets']
                 for asset in asset_base:

@@ -4,8 +4,6 @@ from discord.embeds import EmptyEmbed
 from enum import Enum
 from fake_useragent import UserAgent
 import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 from requests.structures import CaseInsensitiveDict
 import time
 from tinydb import TinyDB, Query
@@ -50,14 +48,14 @@ class _OpenSeaTransactionObject:
                                               'Seller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link,
                                                                                          self.buyer, self.buyer_link),
                                   color=embed_color)
-            embed.set_author(name="New Purchase!", icon_url=icon_url)
+            embed.set_author(name='New Purchase!', icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
             embed = discord.Embed(title=self.name, url=self.link, description='Ξ{} (${})'.format(
                 self.eth_nft_price, self.total_usd_cost) + '\n\n' + 'Seller: [{}]({})'.format(self.seller,
                                                                                               self.seller_link),
                                   color=embed_color)
-            embed.set_author(name="New Listing!", icon_url=icon_url)
+            embed.set_author(name='New Listing!', icon_url=icon_url)
             embed.set_image(url=self.image_thumbnail_url)
         self.discord_embed = embed
 
@@ -92,19 +90,14 @@ class _PostFromOpenSeaDiscord:
         try:
             querystring = {'asset_contract_address': self.contract_address,
                            'event_type': event_type,
-                           "only_opensea": 'false',
+                           'only_opensea': 'false',
                            'offset': '0',
                            'limit': self.limit}
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            session = requests.Session()
-            retry = Retry(connect=3, backoff_factor=5, total=3)
-            adapter = HTTPAdapter(max_retries=retry)
-            session.mount('http://', adapter)
-            session.mount('https://', adapter)
-            self.response = session.get(self.os_events_url, headers=headers, params=querystring)
+            self.response = requests.get(self.os_events_url, headers=headers, params=querystring, timeout=1.5)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -237,18 +230,22 @@ async def try_to_post_embed_to_discord(mfo, channel):
 
 
 async def eth_price(mfo, message):
-    eth_price_url = mfo.base_obj.eth_price_url
-    eth_price_request = requests.request('GET', eth_price_url)
-    if eth_price_request.status_code != 200:
-        await message.channel.send('Sorry, API to fetch ETH price might be down right now.')
+    try:
+        eth_price_url = mfo.base_obj.eth_price_url
+        eth_price_request = requests.get(eth_price_url, timeout=1)
+        if eth_price_request.status_code != 200:
+            await message.channel.send('Sorry, API to fetch ETH price might be down right now.')
+            return
+        eth_price_usd = eth_price_request.json()['USD']
+        await message.channel.send('${}'.format(eth_price_usd))
+    except Exception as e:
+        print(e)
         return
-    eth_price_usd = eth_price_request.json()['USD']
-    await message.channel.send('${}'.format(eth_price_usd))
 
 
 async def gas_tracker(mfo, message, e_scan_key):
     gas_tracker_url = mfo.base_obj.gas_tracker_url.format(e_scan_key)
-    gas_tracker_request = requests.request('GET', gas_tracker_url)
+    gas_tracker_request = requests.get(gas_tracker_url, timeout=1)
     if gas_tracker_request.status_code != 200:
         await message.channel.send('Sorry, API to fetch gas might be down right now.')
         return
@@ -264,13 +261,13 @@ async def gas_tracker(mfo, message, e_scan_key):
 
 async def custom_command_1(mfo, message):
     stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(mfo.base_obj.collection_name)
-    stats_request = requests.request('GET', stats_url)
+    stats_request = requests.get(stats_url, timeout=1)
     if stats_request.status_code != 200:
         await message.channel.send('Sorry, Opensea API might be down right now.')
         return
     floor_price_eth = stats_request.json()['stats']['floor_price']
     eth_price_url = mfo.base_obj.eth_price_url
-    eth_price_request = requests.request('GET', eth_price_url)
+    eth_price_request = requests.get(eth_price_url, timeout=1)
     eth_price_usd = eth_price_request.json()['USD']
     floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
     await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the '
@@ -296,12 +293,12 @@ async def custom_command_2(mfo, message):
         return
     if token_id < 0:
         return
-    asset_url = "https://api.opensea.io/api/v1/assets?token_ids={}" \
-                "&asset_contract_address={}".format(token_id, mfo.base_obj.contract_address)
+    asset_url = 'https://api.opensea.io/api/v1/assets?token_ids={}&asset_contract_address={}'\
+        .format(token_id, mfo.base_obj.contract_address)
     asset_headers = CaseInsensitiveDict()
     asset_headers['User-Agent'] = mfo.base_obj.ua.random
     asset_headers['x-api-key'] = mfo.base_obj.os_api_key
-    asset_request = requests.request("GET", asset_url, headers=asset_headers)
+    asset_request = requests.get(asset_url, headers=asset_headers, timeout=1)
     if asset_request.status_code != 200:
         await message.channel.send('Sorry, Opensea API might be down right now.')
         return

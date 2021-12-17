@@ -5,8 +5,6 @@ from fake_useragent import UserAgent  # noqa: E402
 from HelperCode import find_file  # noqa: E402
 from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
-from requests.adapters import HTTPAdapter  # noqa: E402
-from requests.packages.urllib3.util.retry import Retry  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
 import time  # noqa: E402
 from tinydb import TinyDB, Query  # noqa: E402
@@ -107,12 +105,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            session = requests.Session()
-            retry = Retry(connect=3, backoff_factor=5, total=3)
-            adapter = HTTPAdapter(max_retries=retry)
-            session.mount('http://', adapter)
-            session.mount('https://', adapter)
-            self.response = session.get(self.os_events_url, headers=headers, params=query_strings)
+            self.response = requests.get(self.os_events_url, headers=headers, params=query_strings, timeout=1)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -166,7 +159,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         if self.os_obj_to_post.image_url is None:
             return True
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=1)
             img = open(self.file_name, 'wb')
             img.write(img_response.content)
             img.close()
@@ -181,12 +174,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
         if asset_from_db:
             traits = eval(asset_from_db[0]['traits'])
-        if not rare_trait_list:
+        else:
             asset_url = self.os_asset_url + self.contract_address + '/' + token_id
             asset_headers = CaseInsensitiveDict()
             asset_headers['User-Agent'] = self.ua.random
             asset_headers['x-api-key'] = self.os_api_key
-            asset_response = requests.request('GET', asset_url, headers=asset_headers)
+            asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
             if asset_response.status_code == 200:
                 traits = asset_response.json()['traits']
         if traits is None:
@@ -214,7 +207,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 'page': 1,
                 'offset': self.ether_scan_limit
             }
-            get_tx_request = requests.request('GET', self.ether_scan_api_url, params=get_tx_hash_params)
+            get_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
             tx_response = get_tx_request.json()
             for i in range(0, self.ether_scan_limit):
                 tx_response_base = tx_response['result'][i]
@@ -232,7 +225,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     'txhash': tx_hash,
                     'apikey': self.ether_scan_api_key
                 }
-                get_tx_details_request = requests.request('GET', self.ether_scan_api_url, params=tx_receipt_params)
+                get_tx_details_request = requests.get(self.ether_scan_api_url, params=tx_receipt_params, timeout=1.5)
                 tx_details_response_base = get_tx_details_request.json()['result']
                 tx_eth_hex_value = tx_details_response_base['value']
                 tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
@@ -241,7 +234,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     'action': 'ethprice',
                     'apikey': self.ether_scan_api_key
                 }
-                eth_price_req = requests.request('GET', self.ether_scan_api_url, params=eth_price_params)
+                eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=1.5)
                 eth_price_base = eth_price_req.json()['result']
                 eth_usd_price = eth_price_base['ethusd']
                 usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
@@ -331,7 +324,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         print('Hashtags validated...')
         collection_name_test = values_file_test.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.request('GET', test_collection_name_url)
+        test_response = requests.get(test_collection_name_url, timeout=1)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             stats_json = collection_json['stats']
@@ -362,11 +355,11 @@ class ManageFlowObj:  # Main class which does all of the operations
         print('Twitter credentials validated...')
         test_os_key = values_file_test.readline().strip()
         if test_os_key != 'None':
-            test_os_key_url = "https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1"
+            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
             test_os_headers = CaseInsensitiveDict()
             test_os_headers['Accept'] = 'application/json'
             test_os_headers['x-api-key'] = test_os_key
-            test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
+            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
             if test_os_response.status_code != 200:
                 values_file_test.close()
                 raise Exception('Invalid OpenSea API key supplied.')
@@ -377,7 +370,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         test_ether_scan_key = test_ether_scan_values[0]
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
             format(test_ether_scan_key)
-        test_ether_scan_response = requests.request('GET', test_ether_scan_url)
+        test_ether_scan_response = requests.get(test_ether_scan_url, timeout=1)
         if test_ether_scan_response.json()['message'] == 'NOTOK':
             raise Exception('Invalid Ether Scan key.')
         print('Ether Scan key validated...')
