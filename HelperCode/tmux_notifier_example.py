@@ -5,6 +5,8 @@ import os
 import time
 from tinydb import TinyDB
 
+# this is an example of the generated tmux notifier script
+
 COUNT_ITERATIONS_FILE = find_file.find('count_iterations_CONTRACTADDRESS.json')
 if COUNT_ITERATIONS_FILE is not None:  # run only if iterations DB exists...
 	count_FILE_db = TinyDB(COUNT_ITERATIONS_FILE)
