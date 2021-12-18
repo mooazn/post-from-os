@@ -53,7 +53,7 @@ class ScrapeCollectionTraits:
         self.end_time = None
         self.iteration_num = 1
         self.ua = UserAgent()
-        self.scrape()
+        self.get_assets()
         self.print_time_taken()
 
     def send_requests_for_variables(self):
@@ -64,7 +64,7 @@ class ScrapeCollectionTraits:
         primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]
         return [stats_json, primary_asset_contracts_json]
 
-    def scrape(self):
+    def get_assets(self):
         self.start_time = time.time()
         for i in range(0, math.ceil(self.collection_count / 50)):
             url = self.os_asset_url.format(self.contract_address, i * 50)
