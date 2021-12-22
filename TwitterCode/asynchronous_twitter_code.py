@@ -1,5 +1,5 @@
 import asyncio
-from post_multiple_to_twitter_obj import ManageFlowObj
+from asynchronous_post_to_twitter_obj import ManageFlowObj
 
 
 async def collection_1(obj):        
