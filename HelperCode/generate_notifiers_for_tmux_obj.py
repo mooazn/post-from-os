@@ -54,6 +54,7 @@ class Generator:
     def generate_python_files(self):
         if len(self.collection_names) != len(self.tmux_sessions):
             return
+        space = ' ' * 4
         for session_num in range(0, len(self.tmux_sessions)):
             cur_tmux_session_lower = self.tmux_sessions[session_num]
             with open('tmux_notifier_{}.py'.format(cur_tmux_session_lower), 'w') as n:
@@ -63,19 +64,23 @@ class Generator:
                     '''import sys\nsys.path.append('../')\nfrom HelperCode import find_file\nimport os\nimport time\nfrom tinydb import TinyDB\n\n''')
                 n.write('''COUNT_ITERATIONS_FILE = find_file.find(\'count_iterations_{}.json\')\n'''.
                         format(self.contract_addresses[session_num]))
-                n.write('''if COUNT_ITERATIONS_FILE is not None:\n\t''')
-                n.write('''count_{}_db = TinyDB(COUNT_ITERATIONS_FILE)\n\t'''.format(cur_tmux_session_upper))
-                n.write('''occurred = False\n\tprev_len = 0\n\n\t''')
-                n.write('''def re_run_{}():\n\t\t'''.format(cur_tmux_session_lower))
-                n.write('''os.system(\'pkill -f {}\')\n\t\t'''.format(session_python_file))
-                n.write('''time.sleep(5)\n\t\t''')
-                n.write('''os.system(\'tmux send-keys -t {} \"python3 {}\" enter\')\n\n\t'''.
-                        format(cur_tmux_session_lower, session_python_file))
-                n.write('''while True:\n\t\tif prev_len == len(count_{}_db):\n\t\t\t'''.format(cur_tmux_session_upper))
-                n.write('''if occurred:\n\t\t\t\tre_run_{}()\n\t\t\t\t'''.format(cur_tmux_session_lower))
-                n.write('''occurred = False\n\t\t\t\tprint('Restarted script.')\n\t\t\telse:\n\t\t\t\t''')
-                n.write('''occurred = True\n\t\t\t\tprint('Noticed something off. Will check again...')\n\t\t''')
-                n.write('''else:\n\t\t\tif occurred:\n\t\t\t\toccurred = False\n\t\t\t''')
-                n.write('''prev_len = len(count_{}_db)\n\t\t\t'''.format(cur_tmux_session_upper))
-                n.write('''print('No need to restart.')\n\t\ttime.sleep(60)\n''')
+                n.write('''if COUNT_ITERATIONS_FILE is not None:\n{}'''.format(space))
+                n.write('''count_{}_db = TinyDB(COUNT_ITERATIONS_FILE)\n{}'''.format(cur_tmux_session_upper, space))
+                n.write('''occurred = False\n{}prev_len = 0\n\n{}'''.format(space, space))
+                n.write('''def re_run_{}():\n{}'''.format(cur_tmux_session_lower, space * 2))
+                n.write('''os.system(\'pkill -f {}\')\n{}'''.format(session_python_file, space * 2))
+                n.write('''time.sleep(5)\n{}'''.format(space * 2))
+                n.write('''os.system(\'tmux send-keys -t {} \"python3 {}\" enter\')\n\n{}'''.
+                        format(cur_tmux_session_lower, session_python_file, space))
+                n.write('''while True:\n{}if prev_len == len(count_{}_db):\n{}'''.format(space * 2,
+                                                                                         cur_tmux_session_upper,
+                                                                                         space * 3))
+                n.write('''if occurred:\n{}re_run_{}()\n{}'''.format(space * 4, cur_tmux_session_lower, space * 4))
+                n.write('''occurred = False\n{}print('Restarted script.')\n{}else:\n{}'''.format(space * 4, space * 3,
+                                                                                                 space * 4))
+                n.write('''occurred = True\n{}print('Noticed something off. Will check again...')\n{}'''.
+                        format(space * 4, space * 2))
+                n.write('''else:\n{}if occurred:\n{}occurred = False\n{}'''.format(space * 3, space * 4, space * 3))
+                n.write('''prev_len = len(count_{}_db)\n{}'''.format(cur_tmux_session_upper, space * 3))
+                n.write('''print('No need to restart.')\n{}time.sleep(60)\n'''.format(space * 2))
         print('Generated notifier python files!')
