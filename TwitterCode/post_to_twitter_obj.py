@@ -73,7 +73,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_twitter_db.json')
         self.tx_query = Query()
         self.trait_db_name = trait_db_name
-        if self.trait_db_name is not None:
+        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
             self.trait_db = TinyDB(self.trait_db_name)
             self.trait_query = Query()
         self.tx_queue = []
@@ -133,7 +133,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             except (ValueError, TypeError):
                 continue
             rare_trait_list = []
-            if self.trait_db_name is not None:
+            if type(self.trait_db_name) == str or self.trait_db_name is True:
                 rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
@@ -171,10 +171,11 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
     def create_rare_trait_list(self, token_id):
         rare_trait_list = []
         traits = None
-        asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-        if asset_from_db:
-            traits = eval(asset_from_db[0]['traits'])
-        else:
+        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
+            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+            if asset_from_db:
+                traits = eval(asset_from_db[0]['traits'])
+        if traits is None:
             asset_url = self.os_asset_url + self.contract_address + '/' + token_id
             asset_headers = CaseInsensitiveDict()
             asset_headers['User-Agent'] = self.ua.random
@@ -244,7 +245,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         name = '{} #{}'.format(self.ether_scan_name, token_id)
                         asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
                         rare_trait_list = []
-                        if self.trait_db_name is not None:
+                        if type(self.trait_db_name) == str or self.trait_db_name is True:
                             rare_trait_list = self.create_rare_trait_list(token_id)
                         self.tx_db.insert({'tx': tx_hash})
                         transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
@@ -377,7 +378,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         values_file_test.close()
         print('Validation of Twitter Values .txt complete. No errors found...')
         trait_db = self.trait_db_name
-        if self.trait_db_name is not None:
+        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
             if not str(self.trait_db_name).lower().endswith('.json'):
                 raise Exception('Trait DB must end with a .json file extension.')
             trait_db = find_file.find(self.trait_db_name)

@@ -78,7 +78,7 @@ class ManageMultipleTwitterPosts:
         self.create_map()
         generate_asynchronous_code(self.values_map)
         print('Beginning program...')
-        # asynchronous_twitter_code.run(self.values_map)
+        asynchronous_twitter_code.run(self.values_map)
 
     def validate_params(self):
         print('Beginning validation of Twitter Values File...')
