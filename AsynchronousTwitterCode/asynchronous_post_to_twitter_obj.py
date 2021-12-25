@@ -61,7 +61,7 @@ class _PostFromOpenSeaTwitter:
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_twitter_db_asynchronous.json')
         self.tx_query = Query()
         self.tx_queue = []
-        self.os_limit = 10
+        self.os_limit = 5
         self.ether_scan_limit = int(self.os_limit * 1.5)
         self.twitter = Twython(
             self.twitter_keys[0],
@@ -98,7 +98,10 @@ class _PostFromOpenSeaTwitter:
     def parse_response_objects(self):
         for i in range(0, self.os_limit):
             try:
-                base = self.response.json()['asset_events'][i]
+                try:
+                    base = self.response.json()['asset_events'][i]
+                except IndexError:
+                    continue
                 asset = base['asset']
                 name = str(asset['name'])
                 image_url = asset['image_url']

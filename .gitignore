@@ -1,6 +1,6 @@
 DiscordCode/discord_values_yachts.txt
 DiscordCode/post_yachts_discord.py
-DiscordCode/post_discord_yachts_real.txt
+DiscordCode/discord_values_yachts_real.txt
 
 HelperCode/banana_trait_db.json
 HelperCode/humanoids_trait_db.json
@@ -23,4 +23,5 @@ TwitterCode/post_bananas_twitter.py
 TwitterCode/post_humanoids_twitter.py
 TwitterCode/post_sirens_twitter.py
 TwitterCode/post_yachts_twitter.py
-TwitterCode/twitter_values_test_multiple.txt
+AsynchronousTwitterCode/asynchronous_twitter_values_yachts.txt
+AsynchronousTwitterCode/asynchronous_post_yachts_twitter.py

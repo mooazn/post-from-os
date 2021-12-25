@@ -1,15 +1,13 @@
+import asynchronous_discord_code
 import asyncio
 import discord
 import post_to_discord_obj
-from post_to_discord_obj import ManageFlowObj, EventType
 import requests
 from requests.structures import CaseInsensitiveDict
 
 CLIENT = discord.Client()
-SALES_OBJ = ManageFlowObj()
-SALES_CHANNEL = -1
-LISTINGS_OBJ = ManageFlowObj()
-LISTINGS_CHANNEL = -1
+VALUES = {}
+CONTRACT_ADDRESSES = []
 E_SCAN_KEY = ''
 BOT_PREFIX = ''
 COMMANDS = []
@@ -19,11 +17,15 @@ HELP_MESSAGE = ''
 
 class ManageManager:
     def __init__(self, discord_values_file):
+        global VALUES, CONTRACT_ADDRESSES
         self.discord_values = discord_values_file
+        self.contract_addresses = CONTRACT_ADDRESSES
+        self.has_listings = []
+        self.values = VALUES
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
-        global SALES_OBJ, LISTINGS_OBJ, SALES_CHANNEL, LISTINGS_CHANNEL, BOT_PREFIX, COMMANDS, COMMANDS_DESC, E_SCAN_KEY
+        global BOT_PREFIX, COMMANDS, COMMANDS_DESC, E_SCAN_KEY
         print('Beginning validation of Discord Values File...')
         if not str(self.discord_values).endswith('.txt'):
             raise Exception('Discord values must be a .txt file.')
@@ -32,57 +34,106 @@ class ManageManager:
                 raise Exception('The Discord Values file must be formatted correctly.')
         test_discord_values = open(self.discord_values, 'r')
         discord_token = test_discord_values.readline().strip()
-        channels = test_discord_values.readline().strip().split()
+        collection_names_test = test_discord_values.readline().split('|')
+        if len(collection_names_test) > 5:
+            raise Exception('Too many collections. Please create a new bot for every 5 collections.')
+        for collection_name_test in collection_names_test:
+            test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'. \
+                format(collection_name_test.strip())
+            test_response = requests.get(test_collection_name_url, timeout=1.5)
+            if test_response.status_code == 200:
+                collection_json = test_response.json()['collection']
+                primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
+                contract_address = primary_asset_contracts_json['address']
+                self.contract_addresses.append(contract_address)
+                self.values[contract_address] = []
+                self.values[contract_address].append(collection_name_test.strip())
+            else:
+                test_discord_values.close()
+                raise Exception('The provided collection name does not exist.')
+        print('Collections validated...')
+        channels = test_discord_values.readline().strip()
+        sales_listings_channels = []
+        if '|' in channels:
+            channels = channels.split('|')
+            for channel in channels:
+                sales_listings_channels.append(channel.split())
+            total_channels = 0
+            for sales_listings_channel in sales_listings_channels:
+                for _ in sales_listings_channel:
+                    total_channels += 1
+                    if total_channels > 5:
+                        raise Exception('Too many channels utilized. PLease create a new bot for every 5 channels.')
         try:
-            SALES_CHANNEL = int(channels[0])
-            if len(channels) > 1:
-                LISTINGS_CHANNEL = int(channels[1])
+            if len(sales_listings_channels) > 0:
+                index = 0
+                for sales_listings_channel in sales_listings_channels:
+                    needed_channels = []
+                    try:
+                        cur_contract_address = self.contract_addresses[index]
+                    except IndexError:
+                        raise Exception('The collection names should match the channels. There should ONLY be 1 name '
+                                        'for every 1-2 channels')
+                    sales_channel = int(sales_listings_channel[0])
+                    needed_channels.append(sales_channel)
+                    if len(sales_listings_channel) > 1:
+                        listings_channel = int(sales_listings_channel[1])
+                        needed_channels.append(listings_channel)
+                        self.has_listings.append(True)
+                    else:
+                        self.has_listings.append(False)
+                    self.values[cur_contract_address].append(needed_channels)
+                    index += 1
+            else:
+                needed_channels = []
+                channels = channels.split()
+                self.values[self.contract_addresses[0]] = []
+                sales_channel = int(channels[0])
+                needed_channels.append(sales_channel)
+                if len(channels) > 1:
+                    listings_channel = int(channels[1])
+                    needed_channels.append(listings_channel)
+                    self.has_listings.append(True)
+                else:
+                    self.has_listings.append(False)
+                self.values[self.contract_addresses[0]].append(needed_channels)
         except Exception as e:
             test_discord_values.close()
             print(e)
             raise Exception('Channels are not valid.')
-        print('Channels validated.\n  Sales channel: {}\n  Listings Channel: {}'.
-              format(SALES_CHANNEL, LISTINGS_CHANNEL if LISTINGS_CHANNEL != -1 else 'No listings channel'))
-        collection_name_test = test_discord_values.readline().strip()
-        test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.get(test_collection_name_url, timeout=1.5)
-        if test_response.status_code == 200:
-            collection_json = test_response.json()['collection']
-            primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
-            contract_address = primary_asset_contracts_json['address']
-        else:
-            test_discord_values.close()
-            raise Exception('The provided collection name does not exist.')
-        print('Collection validated...')
-        test_discord_embed_icon = test_discord_values.readline().strip()
-        if test_discord_embed_icon != 'None':
+        print('Channels validated.')
+        test_discord_embed_icons = test_discord_values.readline().strip().split('|')
+        if len(test_discord_embed_icons) != len(collection_names_test):
+            raise Exception('Number of icons must match the number of collections.')
+        index = 0
+        for test_discord_embed_icon in test_discord_embed_icons:
             valid_image_extensions = ['.jpg', '.jpeg', '.png']
             valid_image = False
             for image_extensions in valid_image_extensions:
-                if test_discord_embed_icon.endswith(image_extensions):
+                if test_discord_embed_icon.strip().endswith(image_extensions):
                     valid_image = True
                     break
             if not valid_image:
                 raise Exception('The Discord embed icon should be a valid image.')
-            print('Discord embed icon validated...')
-        else:
-            print('Skipping Discord embed icon.')
-        test_rgb_values = test_discord_values.readline().strip().split()
-        r = 0
-        g = 0
-        b = 0
-        if test_rgb_values != 'None':
-            if len(test_rgb_values) != 3:
+            self.values[self.contract_addresses[index]].append(test_discord_embed_icon.strip())
+            index += 1
+        print('Discord embed icon validated...')
+        test_rgb_values = test_discord_values.readline().strip().split('|')
+        if len(test_rgb_values) != len(collection_names_test):
+            raise Exception('Number of RGB values must match the number of collections.')
+        index = 0
+        for test_rgb_value in test_rgb_values:
+            test_rgb_value = test_rgb_value.split()
+            if len(test_rgb_value) != 3:
                 raise Exception('Invalid RGB values provided.')
-            r = int(test_rgb_values[0])
-            g = int(test_rgb_values[1])
-            b = int(test_rgb_values[2])
-            if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
-                print('RGB Values validated...')
-            else:
+            r = int(test_rgb_value[0])
+            g = int(test_rgb_value[1])
+            b = int(test_rgb_value[2])
+            if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
                 raise Exception('Invalid RGB codes. Must be between 0 and 255.')
-        else:
-            print('Skipping RGB Values and setting to default...')
+            self.values[self.contract_addresses[index]].append([r, g, b])
+            index += 1
+        print('RGB Values validated...')
         test_os_api_key = test_discord_values.readline().strip()
         test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
         test_os_headers = CaseInsensitiveDict()
@@ -92,6 +143,8 @@ class ManageManager:
         if test_os_response.status_code != 200:
             test_discord_values.close()
             raise Exception('Invalid OpenSea API key supplied.')
+        for i in range(0, index):
+            self.values[self.contract_addresses[i]].append(test_os_api_key)
         print('OpenSea Key validated...')
         test_ether_scan_key = test_discord_values.readline().strip()
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
@@ -132,27 +185,90 @@ class ManageManager:
                 raise Exception('Commands are formatted incorrectly. Please list the command followed by a short '
                                 'description and usage (surrounded by quotes). For example: command \"This command '
                                 'is a cool command. To use, type !command\"')
-            print('There {} a total of {} custom command(s): {}'.format('is' if len(COMMANDS) == 1 else 'are',
-                                                                        len(COMMANDS), COMMANDS))
+            print('{} custom command(s): {}'.format(len(COMMANDS), COMMANDS))
             print('Custom commands and custom command descriptions successfully validated...')
         else:
-            print('No custom commands supplied.')
+            print('No custom commands supplied...')
         test_discord_values.close()
         print('Validation of Discord Values .txt complete. No errors found...')
-        print('All files are validated. Beginning program...')
-        SALES_OBJ.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
-                          [test_os_api_key]])
-        CLIENT.loop.create_task(process_sales())
+        print('Validation complete...')
+        self.generate_asynchronous_code()
+        print('Successfully generated asynchronous code...')
+        values_listing = []
+        for ca, v in self.values.items():
+            values_listing.append([[v[0], ca, v[2], v[3], v[4]], v[1]])
+        asynchronous_discord_code.run(CLIENT, values_listing)
         CLIENT.loop.create_task(update_gas_presence())
-        if LISTINGS_CHANNEL != -1:
-            LISTINGS_OBJ.create([[collection_name_test], [contract_address], [test_discord_embed_icon], [r, g, b],
-                                [test_os_api_key]])
-            CLIENT.loop.create_task(process_listings())
         try:
             print('Beginning program...')
             run(discord_token)
         except discord.errors.LoginFailure:
             raise Exception('Invalid Discord token supplied.')
+
+    def generate_asynchronous_code(self):
+        index = 0
+        space = ' ' * 4
+        code_file = open('asynchronous_discord_code.py', 'w')
+        code_file.write(
+            '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
+            \n\n''')
+        for _ in self.values.items():
+            sales_boiler_plate_code = '''
+    await client.wait_until_ready()
+    channel = client.get_channel(sales_channel)
+    while not client.is_closed():
+        status = sales_obj.check_os_api_status(EventType.SALE.value)
+        if not status:
+            await asyncio.sleep(30)
+            continue
+        exists = sales_obj.check_if_new_post_exists()
+        if not exists:
+            await asyncio.sleep(5)
+            continue
+        res = await post_to_discord_obj.try_to_post_embed_to_discord(sales_obj, channel)
+        if res:
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(10)
+            '''
+            listings_boiler_plate_code = '''
+    await client.wait_until_ready()
+    channel = client.get_channel(listings_channel)
+    while not client.is_closed():
+        status = listings_obj.check_os_api_status(EventType.LISTING.value)
+        if not status:
+            await asyncio.sleep(30)
+            continue
+        exists = listings_obj.check_if_new_post_exists()
+        if not exists:
+            await asyncio.sleep(5)
+            continue
+        res = await post_to_discord_obj.try_to_post_embed_to_discord(listings_obj, channel)
+        if res:
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(10)
+            '''
+            code_file.write('''async def process_sales_{}(client, sales_obj, sales_channel):'''.format(index))
+            code_file.write(sales_boiler_plate_code + '\n\n')
+            if self.has_listings[index]:
+                code_file.write('''async def process_listings_{}(client, listings_obj, listings_channel):'''.
+                                format(index))
+                code_file.write(listings_boiler_plate_code + '\n\n')
+            index += 1
+        code_file.write('''def run(client, values):\n{}'''.format(space))
+        index = 0
+        for _ in self.values.items():
+            code_file.write('''sales_obj_{} = ManageFlowObj(values[{}][0])\n{}'''.format(index, index, space))
+            code_file.write('''client.loop.create_task(process_sales_{}(client, sales_obj_{}, values[{}][1][0]))\n{}'''.
+                            format(index, index, index, space))
+            if self.has_listings[index]:
+                code_file.write('''listings_obj_{} = ManageFlowObj(values[{}][0])\n{}'''.format(index, index, space))
+                code_file.write(
+                    '''client.loop.create_task(process_listings_{}(client, listings_obj_{}, values[{}][1][1]))\n{}'''.
+                    format(index, index, index, space))
+            index += 1
+        code_file.close()
 
 
 @CLIENT.event
@@ -170,7 +286,7 @@ async def on_ready():
 
 @CLIENT.event
 async def on_message(message):
-    global BOT_PREFIX, COMMANDS, HELP_MESSAGE, E_SCAN_KEY
+    global BOT_PREFIX, COMMANDS, HELP_MESSAGE, E_SCAN_KEY, VALUES, CONTRACT_ADDRESSES
     if message.author == CLIENT.user:
         return
 
@@ -178,56 +294,22 @@ async def on_message(message):
         await message.channel.send(HELP_MESSAGE)
 
     elif message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
-        await post_to_discord_obj.eth_price(SALES_OBJ, message)
+        await post_to_discord_obj.eth_price(message)
 
     elif message.content.startswith('{}gas'.format(BOT_PREFIX)):  # gas tracker
-        await post_to_discord_obj.gas_tracker(SALES_OBJ, message, E_SCAN_KEY)
+        await post_to_discord_obj.gas_tracker(message, E_SCAN_KEY)
 
     elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[0])):  # custom command 1
-        await post_to_discord_obj.custom_command_1(SALES_OBJ, message)
+        await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
 
     elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[1])):  # custom command 2
-        await post_to_discord_obj.custom_command_2(SALES_OBJ, message)
+        await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
 
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[2])):  # custom command 3
+        await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
 
-async def process_sales():
-    global CLIENT, SALES_OBJ, SALES_CHANNEL
-    await CLIENT.wait_until_ready()
-    channel = CLIENT.get_channel(SALES_CHANNEL)
-    while not CLIENT.is_closed():
-        status = SALES_OBJ.check_os_api_status(EventType.SALE.value)
-        if not status:
-            await asyncio.sleep(30)
-            continue
-        exists = SALES_OBJ.check_if_new_post_exists()
-        if not exists:
-            await asyncio.sleep(5)
-            continue
-        res = await post_to_discord_obj.try_to_post_embed_to_discord(SALES_OBJ, channel)
-        if res:
-            await asyncio.sleep(5)
-        else:
-            await asyncio.sleep(10)
-
-
-async def process_listings():
-    global CLIENT, LISTINGS_OBJ, LISTINGS_CHANNEL
-    await CLIENT.wait_until_ready()
-    channel = CLIENT.get_channel(LISTINGS_CHANNEL)
-    while not CLIENT.is_closed():
-        status = LISTINGS_OBJ.check_os_api_status(EventType.LISTING.value)
-        if not status:
-            await asyncio.sleep(30)
-            continue
-        exists = LISTINGS_OBJ.check_if_new_post_exists()
-        if not exists:
-            await asyncio.sleep(5)
-            continue
-        res = await post_to_discord_obj.try_to_post_embed_to_discord(LISTINGS_OBJ, channel)
-        if res:
-            await asyncio.sleep(5)
-        else:
-            await asyncio.sleep(10)
+    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[3])):  # custom command 4
+        await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
 
 
 async def update_gas_presence():
@@ -244,10 +326,9 @@ async def update_gas_presence():
             await CLIENT.change_presence(activity=discord.Game(
                 name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
             print('Gas updated.', flush=True)
-            await asyncio.sleep(30)
         except Exception as e:
             print(e)
-            await asyncio.sleep(30)
+        await asyncio.sleep(30)
 
 
 def run(discord_token):

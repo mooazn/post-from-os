@@ -62,14 +62,12 @@ class _OpenSeaTransactionObject:
 
 class _PostFromOpenSeaDiscord:
     def __init__(self, values):
-        self.collection_name = values[0][0]
-        self.contract_address = values[1][0]
-        self.embed_icon_url = values[2][0]
+        self.collection_name = values[0]
+        self.contract_address = values[1]
+        self.embed_icon_url = values[2]
         self.embed_rgb_color = values[3]
-        self.os_api_key = values[4][0]
+        self.os_api_key = values[4]
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
-        self.eth_price_url = 'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD'
-        self.gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'
         self.response = None
         self.os_obj_to_post = None
         self.tx_type = None
@@ -188,13 +186,10 @@ class _PostFromOpenSeaDiscord:
 
 
 class ManageFlowObj:
-    def __init__(self):
-        self.base_obj = None
+    def __init__(self, values):
+        self.base_obj = _PostFromOpenSeaDiscord(values)
         self.tx_type = None
         self.date_time_now = None
-
-    def create(self, values):
-        self.base_obj = _PostFromOpenSeaDiscord(values)
 
     def check_os_api_status(self, tx_type):
         self.date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
@@ -229,9 +224,9 @@ async def try_to_post_embed_to_discord(mfo, channel):
         return False
 
 
-async def eth_price(mfo, message):
+async def eth_price(message):
     try:
-        eth_price_url = mfo.base_obj.eth_price_url
+        eth_price_url = 'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD'
         eth_price_request = requests.get(eth_price_url, timeout=1)
         if eth_price_request.status_code != 200:
             await message.channel.send('Sorry, API to fetch ETH price might be down right now.')
@@ -243,9 +238,9 @@ async def eth_price(mfo, message):
         return
 
 
-async def gas_tracker(mfo, message, e_scan_key):
+async def gas_tracker(message, e_scan_key):
     try:
-        gas_tracker_url = mfo.base_obj.gas_tracker_url.format(e_scan_key)
+        gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'.format(e_scan_key)
         gas_tracker_request = requests.get(gas_tracker_url, timeout=1)
         if gas_tracker_request.status_code != 200:
             await message.channel.send('Sorry, API to fetch gas might be down right now.')
@@ -263,22 +258,22 @@ async def gas_tracker(mfo, message, e_scan_key):
         return
 
 
-async def custom_command_1(mfo, message):
+async def custom_command_1(message, values, contract_address):
+    name = values[contract_address][0]
     try:
-        stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(mfo.base_obj.collection_name)
+        stats_url = 'https://api.opensea.io/api/v1/collection/{}/stats'.format(name)
         stats_request = requests.get(stats_url, timeout=1)
         if stats_request.status_code != 200:
             await message.channel.send('Sorry, Opensea API might be down right now.')
             return
         floor_price_eth = stats_request.json()['stats']['floor_price']
-        eth_price_url = mfo.base_obj.eth_price_url
+        eth_price_url = 'https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD'
         eth_price_request = requests.get(eth_price_url, timeout=1)
         eth_price_usd = eth_price_request.json()['USD']
         floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
         await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the'
                                    ' actual floor price, please visit the collection on Opensea: '
-                                   'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd,
-                                                                             mfo.base_obj.collection_name))
+                                   'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd, name))
     except Exception as e:
         print(e, flush=True)
         return
@@ -286,7 +281,10 @@ async def custom_command_1(mfo, message):
 custom_command_2_time_local_map = {}
 
 
-async def custom_command_2(mfo, message):
+async def custom_command_2(message, values, contract_address):
+    ua = UserAgent()
+    rgb = values[contract_address][3]
+    os_api_key = values[contract_address][4]
     try:
         sender = message.author.id
         cur_epoch = int(time.time())
@@ -303,10 +301,10 @@ async def custom_command_2(mfo, message):
         if token_id < 0:
             return
         asset_url = 'https://api.opensea.io/api/v1/assets?token_ids={}&asset_contract_address={}'\
-            .format(token_id, mfo.base_obj.contract_address)
+            .format(token_id, contract_address)
         asset_headers = CaseInsensitiveDict()
-        asset_headers['User-Agent'] = mfo.base_obj.ua.random
-        asset_headers['x-api-key'] = mfo.base_obj.os_api_key
+        asset_headers['User-Agent'] = ua.random
+        asset_headers['x-api-key'] = os_api_key
         asset_request = requests.get(asset_url, headers=asset_headers, timeout=1)
         if asset_request.status_code != 200:
             await message.channel.send('Sorry, Opensea API might be down right now.')
@@ -321,8 +319,7 @@ async def custom_command_2(mfo, message):
         asset_owner = asset_base['owner']['address']
         asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
         asset_link = asset_base['permalink']
-        embed_color = discord.Color.from_rgb(mfo.base_obj.embed_rgb_color[0], mfo.base_obj.embed_rgb_color[1],
-                                             mfo.base_obj.embed_rgb_color[2])
+        embed_color = discord.Color.from_rgb(rgb[0], rgb[1], rgb[2])
         asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
         asset_embed.set_image(url=asset_img_url)
         asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)

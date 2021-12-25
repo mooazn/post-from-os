@@ -1,6 +1,5 @@
 import asynchronous_twitter_code
 import math
-import os
 import requests
 from requests.structures import CaseInsensitiveDict
 from twython import Twython
@@ -8,11 +7,8 @@ import twython.exceptions
 
 
 def generate_asynchronous_code(values_map):
-    if os.path.exists('asynchronous_twitter_code.py'):
-        print('Generated asynchronous code already exists...')
-        return
     create_async_code_file = open('asynchronous_twitter_code.py', 'w')
-    create_async_code_file.write('''import asyncio\nfrom post_multiple_to_twitter_obj import ManageFlowObj\n\n\n''')
+    create_async_code_file.write('''import asyncio\nfrom asynchronous_post_to_twitter_obj import ManageFlowObj\n\n\n''')
     boiler_plate_code = '''    
     while True:
         os_status = obj.check_os_api_status()
