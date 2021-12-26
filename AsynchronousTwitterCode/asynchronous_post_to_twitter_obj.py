@@ -196,11 +196,24 @@ class _PostFromOpenSeaTwitter:
                 tx_response_base = tx_response['result'][i]
                 token_id = tx_response_base['tokenID']
                 tx_hash = str(tx_response_base['hash'])
-                from_address = tx_response_base['from']
-                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
-                    continue
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
                 if tx_exists:
+                    continue
+                if i + 1 != self.ether_scan_limit:
+                    next_tx_hash = str(tx_response['result'][i + 1]['hash'])
+                    if tx_hash == next_tx_hash:
+                        self.tx_db.insert({'tx': tx_hash})
+                        continue
+                else:
+                    get_tx_hash_params['offset'] += 1
+                    get_new_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
+                    new_tx_response = get_new_tx_request.json()
+                    next_tx_hash = str(new_tx_response['result'][i + 1]['hash'])
+                    if tx_hash == next_tx_hash:
+                        self.tx_db.insert({'tx': tx_hash})
+                        continue
+                from_address = tx_response_base['from']
+                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
                     continue
                 tx_receipt_params = {
                     'module': 'proxy',

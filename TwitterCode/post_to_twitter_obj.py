@@ -1,3 +1,4 @@
+import pprint
 import sys
 sys.path.append('../')
 import datetime  # noqa: E402
@@ -91,6 +92,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.twitter.client.close()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
+        return False
         if self.os_api_key == 'None':
             return False
         try:
@@ -156,6 +158,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return True
 
     def download_image(self):  # downloads the image to upload
+        return True
         if self.os_obj_to_post.image_url is None:
             return True
         try:
@@ -214,11 +217,24 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 tx_response_base = tx_response['result'][i]
                 token_id = tx_response_base['tokenID']
                 tx_hash = str(tx_response_base['hash'])
-                from_address = tx_response_base['from']
-                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
-                    continue
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
                 if tx_exists:
+                    continue
+                if i + 1 != self.ether_scan_limit:  # check if next tx has is same as this one's
+                    next_tx_hash = str(tx_response['result'][i + 1]['hash'])
+                    if tx_hash == next_tx_hash:
+                        self.tx_db.insert({'tx': tx_hash})
+                        continue
+                else:  # if we are at the end of the list: fetch the api again, increase offset by 1, and check if same
+                    get_tx_hash_params['offset'] += 1
+                    get_new_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
+                    new_tx_response = get_new_tx_request.json()
+                    next_tx_hash = str(new_tx_response['result'][i + 1]['hash'])
+                    if tx_hash == next_tx_hash:
+                        self.tx_db.insert({'tx': tx_hash})
+                        continue
+                from_address = tx_response_base['from']
+                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
                     continue
                 tx_receipt_params = {
                     'module': 'proxy',
@@ -258,6 +274,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return -1
 
     def post_to_twitter(self):  # uploads to Twitter
+        return True
         try:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
@@ -355,18 +372,18 @@ class ManageFlowObj:  # Main class which does all of the operations
             raise Exception('Invalid Twitter Keys supplied.')
         print('Twitter credentials validated...')
         test_os_key = values_file_test.readline().strip()
-        if test_os_key != 'None':
-            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
-            test_os_headers = CaseInsensitiveDict()
-            test_os_headers['Accept'] = 'application/json'
-            test_os_headers['x-api-key'] = test_os_key
-            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
-            if test_os_response.status_code != 200:
-                values_file_test.close()
-                raise Exception('Invalid OpenSea API key supplied.')
-            print('OpenSea Key validated...')
-        else:
-            print('No OpenSea API Key supplied...')
+        # if test_os_key != 'None':
+        #     test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        #     test_os_headers = CaseInsensitiveDict()
+        #     test_os_headers['Accept'] = 'application/json'
+        #     test_os_headers['x-api-key'] = test_os_key
+        #     test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
+        #     if test_os_response.status_code != 200:
+        #         values_file_test.close()
+        #         raise Exception('Invalid OpenSea API key supplied.')
+        #     print('OpenSea Key validated...')
+        # else:
+        #     print('No OpenSea API Key supplied...')
         test_ether_scan_values = values_file_test.readline().strip().split()
         test_ether_scan_key = test_ether_scan_values[0]
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
