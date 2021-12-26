@@ -1,4 +1,3 @@
-import pprint
 import sys
 sys.path.append('../')
 import datetime  # noqa: E402
