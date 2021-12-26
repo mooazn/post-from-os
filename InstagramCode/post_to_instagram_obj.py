@@ -78,7 +78,7 @@ class _PostFromOpenSeaInstagram:
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
             headers['x-api-key'] = self.os_api_key
-            self.response = requests.request("GET", self.os_url, headers=headers, params=querystring)
+            self.response = requests.get(self.os_url, headers=headers, params=querystring, timeout=1.5)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -148,7 +148,7 @@ class _PostFromOpenSeaInstagram:
 
     def download_image(self):
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=2)
             img = open(self.file_name, "wb")
             img.write(img_response.content)
             img.close()
@@ -164,7 +164,7 @@ class _PostFromOpenSeaInstagram:
                 "key": self.img_bb_key,
                 "image": base64.b64encode(file.read()),
             }
-            res = requests.post(url, payload)
+            res = requests.post(url, payload, timeout=2)
             image_url = str(res.json()['data']['url'])
             image_url = image_url[:len(image_url) - 3]
             self.image_link = image_url + 'jpg'
@@ -176,14 +176,14 @@ class _PostFromOpenSeaInstagram:
 
         querystring = {"access_token": user_access_token}
         headers = {"Accept": "application/json"}
-        response = requests.request("GET", self.insta_id_url, headers=headers, params=querystring)
+        response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=2)
         insta_id = response.json()['instagram_business_account']['id']
 
         pre_upload_url = self.graph_api_url + '{}/media'.format(insta_id)
         pre_upload = {'image_url': self.image_link,
                       'caption': self.os_obj_to_post.insta_caption,
                       'access_token': user_access_token}
-        pre_upload_request = requests.post(pre_upload_url, data=pre_upload)
+        pre_upload_request = requests.post(pre_upload_url, data=pre_upload, timeout=2)
         pre_upload_result = pre_upload_request.json()
 
         if 'id' in pre_upload_result:
@@ -193,7 +193,7 @@ class _PostFromOpenSeaInstagram:
                 'creation_id': creation_id,
                 'access_token': user_access_token
             }
-            requests.post(publish_url, data=publish)
+            requests.post(publish_url, data=publish, timeout=2)
             self.os_obj_to_post.is_posted = True
             return True
         else:
@@ -242,7 +242,7 @@ class ManageFlowObj:
         print('Hashtags validated...')
         collection_name_test = test_instagram_values.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.request('GET', test_collection_name_url)
+        test_response = requests.get(test_collection_name_url, timeout=1.5)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
@@ -257,7 +257,7 @@ class ManageFlowObj:
             "key": test_img_bb_key,
             "image": 'https://sienaconstruction.com/wp-content/uploads/2017/05/test-image.jpg',  # just some random pic
         }
-        test_upload_req = requests.post(test_img_bb_url, payload)
+        test_upload_req = requests.post(test_img_bb_url, payload, timeout=2)
         if test_upload_req.status_code != 200:
             test_instagram_values.close()
             raise Exception('Invalid img.bb key provided.')
@@ -266,7 +266,7 @@ class ManageFlowObj:
         print('Page ID is:', test_page_id)
         # test_insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
         #     format(test_page_id)
-        # test_page_req = requests.request('GET', test_insta_id_url)
+        # test_page_req = requests.get(test_insta_id_url, timeout=2)
         # fake_status_code = int(test_page_req.json()['error']['code'])
         # if fake_status_code != 200:
         #     test_instagram_values.close()
@@ -278,7 +278,7 @@ class ManageFlowObj:
             test_os_headers = CaseInsensitiveDict()
             test_os_headers['Accept'] = 'application/json'
             test_os_headers['x-api-key'] = test_os_key
-            test_os_response = requests.request('GET', test_os_key_url, headers=test_os_headers)
+            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=2)
             if test_os_response.status_code != 200:
                 test_instagram_values.close()
                 raise Exception('Invalid OpenSea API key supplied.')
@@ -332,7 +332,7 @@ class ManageFlowObj:
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            if int(time.time()) - self.begin_time >= 3600 * 24 * 50:
+            if int(time.time()) - self.begin_time >= 3600 * 24 * 20:
                 self.gen_long_lived_token_class.send_email_to_manually_change_user_token()
             # time_now = int(time.time())
             # time_elapsed_since_token_generated = None
@@ -461,7 +461,7 @@ class GenerateLongLivedToken:
                        "fb_exchange_token": short_lived_access_token}
 
         headers = {"Accept": "application/json"}
-        response = requests.request("GET", self.api_fb_exchange_token_url, headers=headers, params=querystring)
+        response = requests.get(self.api_fb_exchange_token_url, headers=headers, params=querystring, timeout=2)
         long_lived_access_token = response.json()['access_token']
         return long_lived_access_token
 
