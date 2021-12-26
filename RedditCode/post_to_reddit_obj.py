@@ -7,29 +7,24 @@ from requests.structures import CaseInsensitiveDict
 import time
 import praw
 from tinydb import TinyDB, Query
+from fake_useragent import UserAgent
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     reddit_caption = None
 
-    def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_, the_date_,
-                 the_time_, link_, rare_trait_list_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_):
         self.name = name_
         self.image_url = image_url_
-        self.seller = seller_
-        self.buyer = buyer_
         self.eth_nft_price = eth_nft_price_
-        self.usd_price = usd_price_
         self.total_usd_cost = total_usd_cost_
-        self.the_date = the_date_
-        self.the_time = the_time_
         self.link = link_
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
 
     def create_reddit_caption(self):
         self.reddit_caption = '{} bought for Ξ{} (${})\n\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
-        if self.rare_trait_list is not None:
+        if self.rare_trait_list:
             self.reddit_caption += 'Rare Traits:\n\n'
             full_rare_trait_sentence = ''
             for rare_trait in self.rare_trait_list:
@@ -39,7 +34,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
 
 
 class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes both OpenSea API and Reddit API
-    def __init__(self, address, supply, values_file, db_name, trait_db_name):  # initialize all the fields
+    def __init__(self, address, supply, values_file, trait_db_name):  # initialize all the fields
         reddit_values_file = values_file
         values = open(reddit_values_file, 'r')
         self.collection_name = values.readline().strip()
@@ -58,9 +53,12 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
         self.response = None
         self.os_obj_to_post = None
         self.driver = None
-        self.tx_db = TinyDB(db_name)
+        self.tx_db = TinyDB(self.collection_name + 'tx_hash_reddit_db.json')
         self.tx_query = Query()
-        self.trait_db = TinyDB(trait_db_name)
+        self.trait_db = trait_db_name
+        if self.trait_db is not None and type(self.trait_db) != bool:
+            self.trait_db = TinyDB(self.trait_db)
+            self.trait_query = Query()
         self.trait_query = Query()
         self.tx_queue = []
         self.limit = 10
@@ -72,16 +70,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             username=self.username,
         )
         self.reddit.validate_on_submit = True
-
-    def create_rare_trait_list(self, traits, rare_trait_list):
-        for trait in traits:
-            trait_type = trait['trait_type']
-            trait_value = trait['value']
-            trait_count = trait['trait_count']
-            rarity_decimal = float(trait_count / self.total_supply)
-            if rarity_decimal <= 0.05:
-                rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
-        rare_trait_list.sort(key=itemgetter(2))
+        self.ua = UserAgent()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
@@ -92,6 +81,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                            "limit": self.limit}
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
+            headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
             self.response = requests.request("GET", self.os_events_url, headers=headers, params=querystring)
             return self.response.status_code == 200
@@ -103,34 +93,12 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
         for i in range(0, self.limit):
             try:
                 base = self.response.json()['asset_events'][i]
-            except TypeError:
-                continue
-            asset = base['asset']
-            try:
+                asset = base['asset']
                 name = str(asset['name'])
-            except TypeError:
-                continue
-            try:
                 image_url = asset['image_url']
-                seller_address = str(base['seller']['address'])
-                buyer_address = str(asset['owner']['address'])
+                tx_hash = str(base['transaction']['transaction_hash'])
             except TypeError:
                 continue
-            try:
-                seller = str(base['seller']['user']['username'])
-                if seller == 'None':
-                    seller = seller_address[0:8]
-            except TypeError:
-                seller = seller_address[0:8]
-            try:
-                buyer = str(asset['owner']['user']['username'])
-                if buyer == 'None':
-                    buyer = buyer_address[0:8]
-            except TypeError:
-                buyer = buyer_address[0:8]
-            if seller_address == buyer_address or seller == buyer:
-                continue
-            tx_hash = str(base['transaction']['transaction_hash'])
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
             if tx_exists:
                 continue
@@ -139,30 +107,15 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                 eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                 usd_price = float(base['payment_token']['usd_price'])
                 total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
-                timestamp = str(base['transaction']['timestamp']).split('T')
-                date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
-                month = datetime.date(date.year, date.month, date.day).strftime('%B')
+                link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            year = str(date.year)
-            day = str(date.day)
-            the_date = month + ' ' + day + ', ' + year
-            the_time = timestamp[1]
-            link = asset['permalink']
-            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
             rare_trait_list = []
-            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-            if asset_from_db:
-                traits = eval(asset_from_db[0]['traits'])
-                self.create_rare_trait_list(traits, rare_trait_list)
-            if not rare_trait_list:
-                asset_response = requests.request("GET", asset_url)
-                if asset_response.status_code == 200:
-                    traits = asset_response.json()['traits']
-                    self.create_rare_trait_list(traits, rare_trait_list)
+            if type(self.trait_db) == str or self.trait_db is True:
+                rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
-            transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price, usd_price,
-                                                    total_usd_cost, the_date, the_time, link, rare_trait_list)
+            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
+                                                    rare_trait_list)
             transaction.create_reddit_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -191,6 +144,33 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             print(e, flush=True)
             return False
 
+    def create_rare_trait_list(self, token_id):
+        rare_trait_list = []
+        traits = None
+        if self.trait_db is not None and type(self.trait_db) != bool:
+            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+            if asset_from_db:
+                traits = eval(asset_from_db[0]['traits'])
+        if traits is None:
+            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+            asset_headers = CaseInsensitiveDict()
+            asset_headers['User-Agent'] = self.ua.random
+            asset_headers['x-api-key'] = self.os_api_key
+            asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
+            if asset_response.status_code == 200:
+                traits = asset_response.json()['traits']
+        if traits is None:
+            return
+        for trait in traits:
+            trait_type = trait['trait_type']
+            trait_value = trait['value']
+            trait_count = trait['trait_count']
+            rarity_decimal = float(trait_count / self.total_supply)
+            if rarity_decimal <= 0.05:
+                rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
+        rare_trait_list.sort(key=itemgetter(2))
+        return rare_trait_list
+
     def post_to_reddit(self):
         try:
             sub_id = self.reddit.subreddit('r/u_{}'.format(self.username)).submit_image(self.os_obj_to_post.name,
@@ -204,17 +184,15 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
 
 
 class ManageFlowObj:  # Main class which does all of the operations
-    def __init__(self, reddit_values_file, tx_hash_db_name, trait_db_name=None):
+    def __init__(self, reddit_values_file, trait_db_name=None):
         self.reddit_values_file = reddit_values_file
-        self.tx_hash_db_name = tx_hash_db_name
         self.trait_db_name = trait_db_name
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
         self.trait_db_name = trait_db_name if collection_stats[2] is None else collection_stats[2]
         print('All files are validated. Beginning program...')
-        self.__base_obj = _PostFromOpenSeaReddit(cont_address, supply, self.reddit_values_file, self.tx_hash_db_name,
-                                                 self.trait_db_name)
+        self.__base_obj = _PostFromOpenSeaReddit(cont_address, supply, self.reddit_values_file, self.trait_db_name)
         self._begin()
 
     def validate_params(self):
@@ -251,11 +229,8 @@ class ManageFlowObj:  # Main class which does all of the operations
             raise Exception('Invalid keys supplied for Reddit API.')
         values_file_test.close()
         print('Validation of Reddit Values .txt complete. No errors found...')
-        if not str(self.tx_hash_db_name).lower().endswith('.json'):
-            raise Exception('Transaction Hash DB must end with a .json file extension.')
-        print('Validation of TX Hash DB Name .json complete. No errors found...')
         trait_db_full_name = None
-        if self.trait_db_name is not None:
+        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
             if not str(self.trait_db_name).lower().endswith('.json'):
                 raise Exception('Trait DB must end with a .json file extension.')
             trait_db_full_name = find_file.find(self.trait_db_name)

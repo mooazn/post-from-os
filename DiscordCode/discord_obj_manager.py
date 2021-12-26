@@ -5,6 +5,8 @@ ex = ManageManager('Discord Values .txt')
 # The Discord Values file (txt) must be like shown below (More info for keys can be found on the Discord Bots area.
 # you must create an app and add a bot. https://discord.com/developers/applications):
 
+# To separate collections, use the '|' character
+
 # put discord bot token here
 # put the channel ids here. for now, sales listings or sales
 # collection name here. can be found in the URL of the homepage of a collection.
@@ -18,10 +20,10 @@ ex = ManageManager('Discord Values .txt')
 # for example:
 # -----discord_values.txt-----
 # bot token
-# sales_channel_id listings_channel_id OR sales_channel_id
-# the-nft
-# image.jpg OR image.jpeg OR image.png
-# 0 0 0
+# sales_channel_id listings_channel_id | sales_channel_id
+# the-nft | the-nft-2
+# image.jpg | image2.jpg
+# 0 0 0 | 255 255 255
 # OS API key
 # EtherScan API Key
 # ! or ? or >> or... etc.
