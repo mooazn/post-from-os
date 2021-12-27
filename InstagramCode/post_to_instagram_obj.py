@@ -12,11 +12,6 @@ from tinydb import TinyDB, Query
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-# TODO:
-#  I need to find a way to limit posts per day to 25 only.
-#  25 is the maximum number of posts you can do per day with the Content Publishing API.
-
-
 class _OpenSeaTransactionObjectInstagram:
     insta_caption = None
 
@@ -64,6 +59,8 @@ class _PostFromOpenSeaInstagram:
         self.response = None
         self.os_obj_to_post = None
         self.limit = 5
+        self.daily_posts = 0
+        self.tomorrow = int(time.time()) + 86400
         self.tx_queue = []
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_instagram_db.json')
         self.tx_query = Query()
@@ -147,6 +144,12 @@ class _PostFromOpenSeaInstagram:
         return True
 
     def download_image(self):
+        if self.daily_posts == 25:
+            if self.tomorrow - int(time.time()) <= 0:
+                self.daily_posts = 0
+                self.tomorrow = int(time.time()) + 86400
+            else:
+                return -1
         try:
             img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=2)
             img = open(self.file_name, "wb")
@@ -195,6 +198,7 @@ class _PostFromOpenSeaInstagram:
             }
             requests.post(publish_url, data=publish, timeout=2)
             self.os_obj_to_post.is_posted = True
+            self.daily_posts += 1
             return True
         else:
             print(pre_upload_result, flush=True)
@@ -309,7 +313,10 @@ class ManageFlowObj:
 
     def try_to_download_image(self, date_time_now):
         image_downloaded = self.__base_obj.download_image()
-        if image_downloaded:
+        if image_downloaded == -1:
+            print('Daily limit reached for posts.')
+            time.sleep(30)
+        elif image_downloaded:
             self.post_to_image_bb(date_time_now)
         else:
             print('Downloading image error at roughly', date_time_now, flush=True)
