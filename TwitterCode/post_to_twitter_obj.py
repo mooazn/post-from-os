@@ -15,8 +15,8 @@ import twython.exceptions  # noqa: E402
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     twitter_caption = None
 
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_,
-                 twitter_tags_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, twitter_tags_,
+                 num_of_assets_):
         self.name = name_
         self.image_url = image_url_
         self.eth_nft_price = eth_nft_price_
@@ -25,9 +25,13 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
         self.twitter_tags = twitter_tags_
+        self.num_of_assets = num_of_assets_
 
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
+        if self.num_of_assets > 1:
+            self.twitter_caption = '{}\n{} assets bought for Ξ{} (${})\n'.\
+                format(self.name, self.num_of_assets, self.eth_nft_price, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
         # the remaining characters at this stage should roughly be 130-180 characters.
         if self.rare_trait_list:
@@ -114,15 +118,33 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
     def parse_response_objects(self):  # parses {limit} objects
         for i in range(0, self.os_limit):
             try:
-                base = self.response.json()['asset_events'][i]
+                try:
+                    base = self.response.json()['asset_events'][i]
+                except IndexError:
+                    continue
+                tx_hash = str(base['transaction']['transaction_hash'])
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                if tx_exists:
+                    continue
+                self.tx_db.insert({'tx': tx_hash})
+                if base['asset_bundle'] is not None:
+                    bundle = base['asset_bundle']
+                    image_url = bundle['asset_contract']['collection']['large_image_url']
+                    eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                    usd_price = float(base['payment_token']['usd_price'])
+                    total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                    link = bundle['permalink']
+                    name = bundle['name']
+                    num_of_assets = len(bundle['assets'])
+                    transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, [],
+                                                            self.twitter_tags, num_of_assets)
+                    transaction.create_twitter_caption()
+                    self.tx_queue.append(transaction)
+                    continue
                 asset = base['asset']
                 name = str(asset['name'])
                 image_url = asset['image_url']
-                tx_hash = str(base['transaction']['transaction_hash'])
             except TypeError:
-                continue
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-            if tx_exists:
                 continue
             try:
                 token_id = asset['token_id']
@@ -137,7 +159,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 rare_trait_list = self.create_rare_trait_list(token_id)
             self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                    rare_trait_list, self.twitter_tags)
+                                                    rare_trait_list, self.twitter_tags, 1)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -262,7 +284,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                             rare_trait_list = self.create_rare_trait_list(token_id)
                         self.tx_db.insert({'tx': tx_hash})
                         transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
-                                                                rare_trait_list, self.twitter_tags)
+                                                                rare_trait_list, self.twitter_tags, 1)
                         transaction.create_twitter_caption()
                         self.tx_queue.append(transaction)
             return self.process_queue()

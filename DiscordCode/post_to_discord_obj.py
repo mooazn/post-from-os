@@ -20,7 +20,7 @@ class _OpenSeaTransactionObject:
     discord_embed = None
 
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, total_usd_cost_, link_, tx_type_,
-                 image_thumbnail_url_, embed_icon_url_, rgb_color_, seller_link_, buyer_link_):
+                 image_thumbnail_url_, embed_icon_url_, rgb_color_, seller_link_, buyer_link_, num_of_assets_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -37,13 +37,17 @@ class _OpenSeaTransactionObject:
         self.b = rgb_color_[2]
         self.seller_link = seller_link_
         self.buyer_link = buyer_link_
+        self.num_of_assets = num_of_assets_
 
     def create_discord_embed(self):
         icon_url = str(self.embed_icon_url) if self.embed_icon_url != 'None' else EmptyEmbed
         embed_color = discord.Color.from_rgb(self.r, self.g, self.b)
         embed = None
+        title = self.name
+        if self.num_of_assets > 1:
+            title = str(self.num_of_assets) + ' assets bought'
         if self.tx_type == EventType.SALE.value:
-            embed = discord.Embed(title=self.name, url=self.link,
+            embed = discord.Embed(title=title, url=self.link,
                                   description='Ξ{} (${})'.format(self.eth_nft_price, self.total_usd_cost) + '\n\n' +
                                               'Seller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link,
                                                                                          self.buyer, self.buyer_link),
@@ -104,7 +108,47 @@ class _PostFromOpenSeaDiscord:
     def parse_response_objects(self):
         for i in range(0, self.limit):
             try:
-                base = self.response.json()['asset_events'][i]
+                try:
+                    base = self.response.json()['asset_events'][i]
+                except IndexError:
+                    continue
+                tx_hash = str(base['transaction']['transaction_hash'])
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                if tx_exists:
+                    continue
+                self.tx_db.insert({'tx': tx_hash})
+                if self.tx_type == EventType.SALE.value and base['asset_bundle'] is not None:
+                    bundle = base['asset_bundle']
+                    image_url = bundle['asset_contract']['collection']['featured_image_url']
+                    eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                    usd_price = float(base['payment_token']['usd_price'])
+                    total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                    link = bundle['permalink']
+                    name = bundle['name']
+                    num_of_assets = len(bundle['assets'])
+                    seller_address = str(base['seller']['address'])
+                    seller_link = 'https://opensea.io/{}'.format(seller_address)
+                    buyer_address = str(base['winner_account']['address'])
+                    buyer_link = 'https://opensea.io/{}'.format(buyer_address)
+                    try:
+                        seller = str(base['seller']['user']['username'])
+                        if seller == 'None':
+                            seller = seller_address[0:8]
+                    except TypeError:
+                        seller = seller_address[0:8]
+                    try:
+                        buyer = str(base['winner_account']['user']['username'])
+                        if buyer == 'None':
+                            buyer = buyer_address[0:8]
+                    except TypeError:
+                        buyer = buyer_address[0:8]
+                    transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, eth_nft_price,
+                                                            total_usd_cost, link, self.tx_type, None,
+                                                            self.embed_icon_url, self.embed_rgb_color, seller_link,
+                                                            buyer_link, num_of_assets)
+                    transaction.create_discord_embed()
+                    self.tx_queue.append(transaction)
+                    continue
                 asset = base['asset']
                 name = str(asset['name'])
                 image_url = asset['image_url']
@@ -134,22 +178,14 @@ class _PostFromOpenSeaDiscord:
                 if seller_address == buyer_address or seller == buyer:
                     continue
                 try:
-                    tx_hash = str(base['transaction']['transaction_hash'])
-                except TypeError:
-                    continue
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-                if tx_exists:
-                    continue
-                try:
                     price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                     total_usd_cost = '{:.2f}'.format(round(price * usd_price, 2))
                 except (ValueError, TypeError):
                     continue
-                self.tx_db.insert({'tx': tx_hash})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price,
                                                         total_usd_cost, link, self.tx_type, image_thumbnail_url,
                                                         self.embed_icon_url, self.embed_rgb_color, seller_link,
-                                                        buyer_link)
+                                                        buyer_link, 1)
             elif self.tx_type == EventType.LISTING.value:
                 try:
                     listing_id = str(base['id'])
@@ -158,15 +194,15 @@ class _PostFromOpenSeaDiscord:
                 listing_exists = False if len(self.id_db.search(self.id_query.id == listing_id)) == 0 else True
                 if listing_exists:
                     continue
+                self.id_db.insert({'id': listing_id})
                 try:
                     price = float('{0:.5f}'.format(int(base['starting_price']) / 1e18))
                     total_usd_cost = '{:.2f}'.format(round(price * usd_price, 2))
                 except (ValueError, TypeError):
                     continue
-                self.id_db.insert({'id': listing_id})
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, total_usd_cost, link,
                                                         self.tx_type, image_thumbnail_url, self.embed_icon_url,
-                                                        self.embed_rgb_color, seller_link, buyer_link)
+                                                        self.embed_rgb_color, seller_link, buyer_link, 1)
             transaction.create_discord_embed()
             self.tx_queue.append(transaction)
         return self.process_queue()
