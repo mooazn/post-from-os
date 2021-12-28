@@ -13,10 +13,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 class _OpenSeaTransactionObjectInstagram:
-    insta_caption = None
-
     def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_,
-                 the_date_, the_time_, insta_tags_):
+                 the_date_, the_time_, insta_tags_, tx_hash_):
+        self.insta_caption = None
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -28,6 +27,7 @@ class _OpenSeaTransactionObjectInstagram:
         self.the_time = the_time_
         self.insta_tags = insta_tags_
         self.is_posted = False
+        self.tx_hash = tx_hash_
 
     def create_insta_caption(self):
         self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
@@ -123,9 +123,9 @@ class _PostFromOpenSeaInstagram:
             day = str(date.day)
             the_date = month + ' ' + day + ', ' + year
             the_time = timestamp[1]
-            self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, eth_nft_price, usd_price,
-                                                             total_usd_cost, the_date, the_time, self.insta_tags)
+                                                             total_usd_cost, the_date, the_time, self.insta_tags,
+                                                             tx_hash)
             transaction.create_insta_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -198,6 +198,7 @@ class _PostFromOpenSeaInstagram:
             }
             requests.post(publish_url, data=publish, timeout=2)
             self.os_obj_to_post.is_posted = True
+            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
             self.daily_posts += 1
             return True
         else:

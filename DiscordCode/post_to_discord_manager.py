@@ -281,7 +281,7 @@ async def on_ready():
     for i in range(0, len(COMMANDS_DESC)):
         HELP_MESSAGE += 'Custom command: \'{}\'. {}'.format(COMMANDS[i], COMMANDS_DESC[i]) + '\n\n'
     HELP_MESSAGE += '```'
-    print('Logging in and setting up help command...', flush=True)
+    print('Logging in and setting up help command...')
 
 
 @CLIENT.event
@@ -327,7 +327,7 @@ async def update_gas_presence():
                 name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
             print('Gas updated.', flush=True)
         except Exception as e:
-            print(e)
+            print(e, flush=True)
         await asyncio.sleep(30)
 
 

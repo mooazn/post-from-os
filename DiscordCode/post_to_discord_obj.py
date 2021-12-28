@@ -112,13 +112,13 @@ class _PostFromOpenSeaDiscord:
                     base = self.response.json()['asset_events'][i]
                 except IndexError:
                     continue
-                tx_hash = str(base['transaction']['transaction_hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-                if tx_exists:
-                    continue
-                self.tx_db.insert({'tx': tx_hash})
                 if self.tx_type == EventType.SALE.value and base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
+                    tx_hash = str(base['transaction']['transaction_hash'])
+                    tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                    if tx_exists:
+                        continue
+                    self.tx_db.insert({'tx': tx_hash})
                     image_url = bundle['asset_contract']['collection']['featured_image_url']
                     eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                     usd_price = float(base['payment_token']['usd_price'])
@@ -175,6 +175,11 @@ class _PostFromOpenSeaDiscord:
                 buyer = buyer_address[0:8]
             transaction = None
             if self.tx_type == EventType.SALE.value:
+                tx_hash = str(base['transaction']['transaction_hash'])
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                if tx_exists:
+                    continue
+                self.tx_db.insert({'tx': tx_hash})
                 if seller_address == buyer_address or seller == buyer:
                     continue
                 try:
@@ -291,6 +296,7 @@ async def gas_tracker(message, e_scan_key):
         await message.channel.send(embed=gas_embed)
     except Exception as e:
         print(e, flush=True)
+        await message.channel.send('Something went wrong. Please try again later.')
         return
 
 
@@ -312,6 +318,7 @@ async def custom_command_1(message, values, contract_address):
                                    'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd, name))
     except Exception as e:
         print(e, flush=True)
+        await message.channel.send('Something went wrong. Please try again later.')
         return
 
 custom_command_2_time_local_map = {}
@@ -362,4 +369,5 @@ async def custom_command_2(message, values, contract_address):
         await message.channel.send(embed=asset_embed)
     except Exception as e:
         print(e, flush=True)
+        await message.channel.send('Something went wrong. Please try again later.')
         return

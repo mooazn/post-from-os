@@ -12,9 +12,9 @@ from tinydb import TinyDB, Query  # noqa: E402
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    tumblr_caption = None
-
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, num_of_assets_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, num_of_assets_,
+                 tx_hash_):
+        self.tumblr_caption = None
         self.name = name_
         self.image_url = image_url_
         self.eth_nft_price = eth_nft_price_
@@ -23,6 +23,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
         self.num_of_assets = num_of_assets_
+        self.tx_hash = tx_hash_
 
     def create_tumblr_caption(self):
         self.tumblr_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
@@ -55,13 +56,8 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
         tumblr_oauth_token = values.readline().strip()
         tumblr_oauth_token_secret = values.readline().strip()
         self.os_api_key = values.readline().strip()
-        self.ether_scan_values = values.readline().strip().split()
         self.blog_name = values.readline().strip()
         values.close()
-        self.ether_scan_api_key = self.ether_scan_values[0]
-        self.ether_scan_name = self.collection_name
-        if len(self.ether_scan_values) > 1:
-            self.ether_scan_name = self.ether_scan_values[1]
         self.file_name = self.collection_name + '_tumblr.jpeg'
         self.contract_address = address
         self.total_supply = supply
@@ -119,7 +115,6 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
                 if tx_exists:
                     continue
-                self.tx_db.insert({'tx': tx_hash})
                 if base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
@@ -130,7 +125,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
                     transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, [],
-                                                            num_of_assets)
+                                                            num_of_assets, tx_hash)
                     transaction.create_tumblr_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -150,9 +145,8 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             rare_trait_list = []
             if type(self.trait_db_name) == str or self.trait_db_name is True:
                 rare_trait_list = self.create_rare_trait_list(token_id)
-            self.tx_db.insert({'tx': tx_hash})
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                    rare_trait_list, 1)
+                                                    rare_trait_list, 1, tx_hash)
             transaction.create_tumblr_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -171,106 +165,35 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
         return True
 
     def create_rare_trait_list(self, token_id):
-        rare_trait_list = []
-        traits = None
-        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
-            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-            if asset_from_db:
-                traits = eval(asset_from_db[0]['traits'])
-        if traits is None:
-            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
-            asset_headers = CaseInsensitiveDict()
-            asset_headers['User-Agent'] = self.ua.random
-            asset_headers['x-api-key'] = self.os_api_key
-            asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
-            if asset_response.status_code == 200:
-                traits = asset_response.json()['traits']
-        if traits is None:
-            return
-        for trait in traits:
-            trait_type = trait['trait_type']
-            trait_value = trait['value']
-            trait_count = trait['trait_count']
-            rarity_decimal = float(trait_count / self.total_supply)
-            if rarity_decimal <= 0.05:
-                rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
-        rare_trait_list.sort(key=itemgetter(2))
-        return rare_trait_list
-
-    def process_via_ether_scan(self):
         try:
-            get_tx_hash_params = {
-                'module': 'account',
-                'action': 'tokennfttx',
-                'contractaddress': self.contract_address,
-                'startblock': 0,
-                'endblock': 999999999,
-                'sort': 'desc',
-                'apikey': self.ether_scan_api_key,
-                'page': 1,
-                'offset': self.ether_scan_limit
-            }
-            get_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
-            tx_response = get_tx_request.json()
-            for i in range(0, self.ether_scan_limit):
-                tx_response_base = tx_response['result'][i]
-                token_id = tx_response_base['tokenID']
-                tx_hash = str(tx_response_base['hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-                if tx_exists:
-                    continue
-                if i + 1 != self.ether_scan_limit:  # check if next tx has is same as this one's
-                    next_tx_hash = str(tx_response['result'][i + 1]['hash'])
-                    if tx_hash == next_tx_hash:
-                        self.tx_db.insert({'tx': tx_hash})
-                        continue
-                else:  # if we are at the end of the list: fetch the api again, increase offset by 1, and check if same
-                    get_tx_hash_params['offset'] += 1
-                    get_new_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
-                    new_tx_response = get_new_tx_request.json()
-                    next_tx_hash = str(new_tx_response['result'][i + 1]['hash'])
-                    if tx_hash == next_tx_hash:
-                        self.tx_db.insert({'tx': tx_hash})
-                        continue
-                from_address = tx_response_base['from']
-                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
-                    continue
-                tx_receipt_params = {
-                    'module': 'proxy',
-                    'action': 'eth_getTransactionByHash',
-                    'txhash': tx_hash,
-                    'apikey': self.ether_scan_api_key
-                }
-                get_tx_details_request = requests.get(self.ether_scan_api_url, params=tx_receipt_params, timeout=1.5)
-                tx_details_response_base = get_tx_details_request.json()['result']
-                tx_eth_hex_value = tx_details_response_base['value']
-                tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
-                eth_price_params = {
-                    'module': 'stats',
-                    'action': 'ethprice',
-                    'apikey': self.ether_scan_api_key
-                }
-                eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=1.5)
-                eth_price_base = eth_price_req.json()['result']
-                eth_usd_price = eth_price_base['ethusd']
-                usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
-                if tx_eth_value != 0.0:
-                    input_type = tx_details_response_base['input']
-                    if input_type.startswith('0xab834bab'):  # this is an atomic match! (check ether scan logs)
-                        name = '{} #{}'.format(self.ether_scan_name, token_id)
-                        asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
-                        rare_trait_list = []
-                        if type(self.trait_db_name) == str or self.trait_db_name is True:
-                            rare_trait_list = self.create_rare_trait_list(token_id)
-                        self.tx_db.insert({'tx': tx_hash})
-                        transaction = _OpenSeaTransactionObject(name, None, tx_eth_value, usd_nft_cost, asset_link,
-                                                                rare_trait_list, 1)
-                        transaction.create_tumblr_caption()
-                        self.tx_queue.append(transaction)
-            return self.process_queue()
+            rare_trait_list = []
+            traits = None
+            if self.trait_db_name is not None and type(self.trait_db_name) != bool:
+                asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+                if asset_from_db:
+                    traits = eval(asset_from_db[0]['traits'])
+            if traits is None:
+                asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+                asset_headers = CaseInsensitiveDict()
+                asset_headers['User-Agent'] = self.ua.random
+                asset_headers['x-api-key'] = self.os_api_key
+                asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
+                if asset_response.status_code == 200:
+                    traits = asset_response.json()['traits']
+            if traits is None:
+                return
+            for trait in traits:
+                trait_type = trait['trait_type']
+                trait_value = trait['value']
+                trait_count = trait['trait_count']
+                rarity_decimal = float(trait_count / self.total_supply)
+                if rarity_decimal <= 0.05:
+                    rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
+            rare_trait_list.sort(key=itemgetter(2))
+            return rare_trait_list
         except Exception as e:
             print(e, flush=True)
-            return -1
+            return
 
     def post_to_tumblr(self):  # uploads to Tumblr
         try:
@@ -282,6 +205,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             self.tumblr.create_photo(self.blog_name, state='published', tags=self.tumblr_tags,
                                      source=self.os_obj_to_post.image_url, caption=self.os_obj_to_post.tumblr_caption)
             self.os_obj_to_post.is_posted = True
+            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
             return True
         except Exception as e:
             print(e, flush=True)
@@ -304,7 +228,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         if not str(self.tumblr_values_file).lower().endswith('.txt'):
             raise Exception('Tumblr Values must be a .txt file.')
         with open(self.tumblr_values_file) as values_file:
-            if len(values_file.readlines()) != 9:
+            if len(values_file.readlines()) != 8:
                 raise Exception('The Tumblr Values file must be formatted correctly.')
         print('Number of lines validated.')
         values_file_test = open(self.tumblr_values_file, 'r')
@@ -370,15 +294,6 @@ class ManageFlowObj:  # Main class which does all of the operations
             print('OpenSea Key validated...')
         else:
             print('No OpenSea API Key supplied...')
-        test_ether_scan_values = values_file_test.readline().strip().split()
-        test_ether_scan_key = test_ether_scan_values[0]
-        test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
-            format(test_ether_scan_key)
-        test_ether_scan_response = requests.get(test_ether_scan_url, timeout=1)
-        if test_ether_scan_response.json()['message'] == 'NOTOK':
-            raise Exception('Invalid Ether Scan key.')
-        print('Ether Scan key validated...')
-        values_file_test.close()
         print('Validation of Tumblr Values .txt complete. No errors found...')
         trait_db = self.trait_db_name
         if self.trait_db_name is not None and type(self.trait_db_name) != bool:
@@ -402,16 +317,7 @@ class ManageFlowObj:  # Main class which does all of the operations
             self.check_if_new_post_exists(date_time_now)
         else:
             print('OS API is not working at roughly', date_time_now, flush=True)
-            print('Attempting to use Ether Scan API at roughly', date_time_now, flush=True)
-            new_post_exists = self.__base_obj.process_via_ether_scan()
-            if new_post_exists == -1:
-                print('Error processing via Ether Scan API at roughly', date_time_now, flush=True)
-                time.sleep(30)
-            elif new_post_exists:
-                self.try_to_post_to_tumblr(date_time_now)
-            else:
-                print('No new post at roughly', date_time_now, flush=True)
-                time.sleep(5)
+            time.sleep(30)
 
     def check_if_new_post_exists(self, date_time_now):
         new_post_exists = self.__base_obj.parse_response_objects()

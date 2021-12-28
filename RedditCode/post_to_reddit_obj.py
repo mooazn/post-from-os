@@ -11,9 +11,9 @@ from tinydb import TinyDB, Query
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    reddit_caption = None
-
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, num_of_assets_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, num_of_assets_,
+                 tx_hash_):
+        self.reddit_caption = None
         self.name = name_
         self.image_url = image_url_
         self.eth_nft_price = eth_nft_price_
@@ -22,6 +22,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.is_posted = False
         self.rare_trait_list = rare_trait_list_
         self.num_of_assets = num_of_assets_
+        self.tx_hash = tx_hash_
 
     def create_reddit_caption(self):
         self.reddit_caption = '{} bought for Ξ{} (${})\n\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
@@ -104,7 +105,6 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
                 if tx_exists:
                     continue
-                self.tx_db.insert({'tx': tx_hash})
                 if base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
@@ -115,7 +115,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
                     transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, [],
-                                                            num_of_assets)
+                                                            num_of_assets, tx_hash)
                     transaction.create_reddit_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -136,7 +136,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             if type(self.trait_db) == str or self.trait_db is True:
                 rare_trait_list = self.create_rare_trait_list(token_id)
             transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                    rare_trait_list, 1)
+                                                    rare_trait_list, 1, tx_hash)
             transaction.create_reddit_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -166,31 +166,35 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             return False
 
     def create_rare_trait_list(self, token_id):
-        rare_trait_list = []
-        traits = None
-        if self.trait_db is not None and type(self.trait_db) != bool:
-            asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-            if asset_from_db:
-                traits = eval(asset_from_db[0]['traits'])
-        if traits is None:
-            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
-            asset_headers = CaseInsensitiveDict()
-            asset_headers['User-Agent'] = self.ua.random
-            asset_headers['x-api-key'] = self.os_api_key
-            asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
-            if asset_response.status_code == 200:
-                traits = asset_response.json()['traits']
-        if traits is None:
+        try:
+            rare_trait_list = []
+            traits = None
+            if self.trait_db is not None and type(self.trait_db) != bool:
+                asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
+                if asset_from_db:
+                    traits = eval(asset_from_db[0]['traits'])
+            if traits is None:
+                asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+                asset_headers = CaseInsensitiveDict()
+                asset_headers['User-Agent'] = self.ua.random
+                asset_headers['x-api-key'] = self.os_api_key
+                asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
+                if asset_response.status_code == 200:
+                    traits = asset_response.json()['traits']
+            if traits is None:
+                return
+            for trait in traits:
+                trait_type = trait['trait_type']
+                trait_value = trait['value']
+                trait_count = trait['trait_count']
+                rarity_decimal = float(trait_count / self.total_supply)
+                if rarity_decimal <= 0.05:
+                    rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
+            rare_trait_list.sort(key=itemgetter(2))
+            return rare_trait_list
+        except Exception as e:
+            print(e, flush=True)
             return
-        for trait in traits:
-            trait_type = trait['trait_type']
-            trait_value = trait['value']
-            trait_count = trait['trait_count']
-            rarity_decimal = float(trait_count / self.total_supply)
-            if rarity_decimal <= 0.05:
-                rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
-        rare_trait_list.sort(key=itemgetter(2))
-        return rare_trait_list
 
     def post_to_reddit(self):
         try:
@@ -198,6 +202,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                                                                                         image_path=self.file_name).id
             self.reddit.submission(id=sub_id).reply(self.os_obj_to_post.reddit_caption)
             self.os_obj_to_post.is_posted = True
+            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
             return True
         except Exception as e:
             print(e, flush=True)

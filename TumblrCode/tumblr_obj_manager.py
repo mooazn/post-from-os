@@ -15,7 +15,6 @@ ex = ManageFlowObj('Tumblr Values .txt', 'True OR False OR Trait DB.json')
 # tumblr oauth token
 # tumblr oauth token secret
 # OS API key
-# Etherscan API key Default Name
 # Blog Name
 
 # for example:
@@ -27,7 +26,6 @@ ex = ManageFlowObj('Tumblr Values .txt', 'True OR False OR Trait DB.json')
 # tumblr_oauth_token
 # tumblr_oauth_token_secret
 # OS API key OR None
-# Etherscan API key Name OR Etherscan API key
 # mycoolblog
 
 # The next provided string (Trait DB Name) is the .json file name for the trait TinyDB. This DB is used to efficiently
