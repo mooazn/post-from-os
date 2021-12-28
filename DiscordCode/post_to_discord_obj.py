@@ -337,6 +337,9 @@ async def custom_command_2(message, values, contract_address):
             await message.channel.send('Please wait 5 seconds before using this command again.')
             return
         custom_command_2_time_local_map[sender] = cur_epoch
+        if len(message.content.split()) == 1:
+            await message.channel.send('Please provided a Token ID.')
+            return
         try:
             token_id = int(message.content.split()[1])
         except ValueError:

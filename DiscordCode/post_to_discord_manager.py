@@ -1,5 +1,6 @@
 import asynchronous_discord_code
 import asyncio
+import difflib
 import discord
 import post_to_discord_obj
 import requests
@@ -274,6 +275,9 @@ class ManageManager:
 @CLIENT.event
 async def on_ready():
     global HELP_MESSAGE, COMMANDS, COMMANDS_DESC
+    COMMANDS.append('help')
+    COMMANDS.append('eth')
+    COMMANDS.append('gas')
     help_help = 'Default command: \'help\'. \"This command.\"\n\n'
     eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
     gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
@@ -290,26 +294,37 @@ async def on_message(message):
     if message.author == CLIENT.user:
         return
 
-    if message.content.startswith('{}help'.format(BOT_PREFIX)):  # help command
-        await message.channel.send(HELP_MESSAGE)
+    if message.content[0] == BOT_PREFIX:
+        message.content = str(message.content)[1:]
+        command_param = message.content.split()
 
-    elif message.content.startswith('{}eth'.format(BOT_PREFIX)):  # eth price
-        await post_to_discord_obj.eth_price(message)
+        if message.content == COMMANDS[len(COMMANDS) - 3]:  # help command
+            await message.channel.send(HELP_MESSAGE)
 
-    elif message.content.startswith('{}gas'.format(BOT_PREFIX)):  # gas tracker
-        await post_to_discord_obj.gas_tracker(message, E_SCAN_KEY)
+        elif message.content == COMMANDS[len(COMMANDS) - 2]:  # eth price
+            await post_to_discord_obj.eth_price(message)
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[0])):  # custom command 1
-        await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
+        elif message.content == COMMANDS[len(COMMANDS) - 1]:  # gas tracker
+            await post_to_discord_obj.gas_tracker(message, E_SCAN_KEY)
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[1])):  # custom command 2
-        await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
+        elif message.content == ('{}'.format(COMMANDS[0])):  # custom command 1
+            await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[2])):  # custom command 3
-        await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
+        elif command_param[0] == ('{}'.format(COMMANDS[1])):  # custom command 2
+            await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
 
-    elif message.content.startswith('{}{}'.format(BOT_PREFIX, COMMANDS[3])):  # custom command 4
-        await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
+        elif message.content == ('{}'.format(COMMANDS[2])):  # custom command 3
+            await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
+
+        elif command_param[0] == ('{}'.format(COMMANDS[3])):  # custom command 4
+            await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
+
+        else:
+            closest_words = difflib.get_close_matches(message.content, COMMANDS)
+            if len(closest_words) > 0:
+                closest_word = closest_words[0]
+                if message.content != closest_word:
+                    await message.channel.send('Did you mean `{}`?'.format(closest_word))
 
 
 async def update_gas_presence():
