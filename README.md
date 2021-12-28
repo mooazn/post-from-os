@@ -8,11 +8,11 @@
 
 #### Twitter Sales Accounts: 
 
+https://twitter.com/NoidsSalesBot
+
 https://twitter.com/BoredBananasBot
 
 https://twitter.com/YachtSalesBot
-
-https://twitter.com/NoidsSalesBot
 
 https://twitter.com/SirenSalesBot
 
