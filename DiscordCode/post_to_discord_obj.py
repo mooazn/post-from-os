@@ -279,17 +279,11 @@ async def eth_price(message):
         return
 
 
-async def gas_tracker(message, e_scan_key):
+async def gas_tracker(message, gas):
     try:
-        gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'.format(e_scan_key)
-        gas_tracker_request = requests.get(gas_tracker_url, timeout=1)
-        if gas_tracker_request.status_code != 200:
-            await message.channel.send('Sorry, API to fetch gas might be down right now.')
-            return
-        gas = gas_tracker_request.json()['result']
-        slow_gas = gas['SafeGasPrice']
-        avg_gas = gas['ProposeGasPrice']
-        fast_gas = gas['FastGasPrice']
+        fast_gas = gas[0]
+        avg_gas = gas[1]
+        slow_gas = gas[2]
         gas_embed = discord.Embed(title=':fuelpump: **Current Gas Prices**\n')
         gas_embed.description = ':zap: **Fast**\n{} Gwei\n\n:person_walking: **Average**\n{} Gwei\n\n:turtle: ' \
                                 '**Slow**\n{} Gwei'.format(fast_gas, avg_gas, slow_gas)
@@ -321,24 +315,14 @@ async def custom_command_1(message, values, contract_address):
         await message.channel.send('Something went wrong. Please try again later.')
         return
 
-custom_command_2_time_local_map = {}
-
 
 async def custom_command_2(message, values, contract_address):
     ua = UserAgent()
     rgb = values[contract_address][3]
     os_api_key = values[contract_address][4]
     try:
-        sender = message.author.id
-        cur_epoch = int(time.time())
-        if sender not in custom_command_2_time_local_map:
-            custom_command_2_time_local_map[sender] = cur_epoch
-        elif cur_epoch - custom_command_2_time_local_map[sender] <= 5:
-            await message.channel.send('Please wait 5 seconds before using this command again.')
-            return
-        custom_command_2_time_local_map[sender] = cur_epoch
         if len(message.content.split()) == 1:
-            await message.channel.send('Please provided a Token ID.')
+            await message.channel.send('Please provide a valid Token ID.')
             return
         try:
             token_id = int(message.content.split()[1])

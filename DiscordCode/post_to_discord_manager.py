@@ -5,6 +5,7 @@ import discord
 import post_to_discord_obj
 import requests
 from requests.structures import CaseInsensitiveDict
+import time
 
 CLIENT = discord.Client()
 VALUES = {}
@@ -14,6 +15,8 @@ BOT_PREFIX = ''
 COMMANDS = []
 COMMANDS_DESC = []
 HELP_MESSAGE = ''
+USER_TIME_ELAPSED_MAP = {}
+GAS_CACHE = []
 
 
 class ManageManager:
@@ -174,6 +177,13 @@ class ManageManager:
                         while test_commands[end_index][-1] != '\"':
                             end_index += 1
                         desc = ' '.join(test_commands[index:end_index + 1])
+                        if 'To use, type: ' in desc:
+                            usage = desc.split('To use, type: ')[1]
+                            if not usage.startswith(BOT_PREFIX):
+                                raise Exception('Custom command does not begin with the provided prefix.')
+                        else:
+                            raise Exception('Command descriptions must always end in this format: \'To use, type: '
+                                            '[usage]')
                         COMMANDS_DESC.append(desc)
                         index = end_index
                     else:
@@ -185,9 +195,9 @@ class ManageManager:
                 print(e)
                 raise Exception('Commands are formatted incorrectly. Please list the command followed by a short '
                                 'description and usage (surrounded by quotes). For example: command \"This command '
-                                'is a cool command. To use, type !command\"')
-            print('{} custom command(s): {}'.format(len(COMMANDS), COMMANDS))
+                                'is a cool command. To use, type: !command\"')
             print('Custom commands and custom command descriptions successfully validated...')
+            print('{} custom command(s): {}'.format(len(COMMANDS), COMMANDS))
         else:
             print('No custom commands supplied...')
         test_discord_values.close()
@@ -274,14 +284,17 @@ class ManageManager:
 
 @CLIENT.event
 async def on_ready():
-    global HELP_MESSAGE, COMMANDS, COMMANDS_DESC
+    global HELP_MESSAGE, COMMANDS, COMMANDS_DESC, BOT_PREFIX
     COMMANDS.append('help')
     COMMANDS.append('eth')
     COMMANDS.append('gas')
+    bot_prefix = 'The prefix for this bot is \"{}\"\n\n'.format(BOT_PREFIX)
     help_help = 'Default command: \'help\'. \"This command.\"\n\n'
-    eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type !eth\"\n\n'
-    gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type !gas\"\n\n'
-    HELP_MESSAGE = '```' + help_help + eth_help + gas_help
+    eth_help = 'Default command: \'eth\'. \"Fetches the current price of ETH. To use, type: {}eth\"\n\n'.\
+        format(BOT_PREFIX)
+    gas_help = 'Default command: \'gas\'. \"Fetches the current gas prices of ETH. To use, type: {}gas\"\n\n'.\
+        format(BOT_PREFIX)
+    HELP_MESSAGE = '```' + bot_prefix + help_help + eth_help + gas_help
     for i in range(0, len(COMMANDS_DESC)):
         HELP_MESSAGE += 'Custom command: \'{}\'. {}'.format(COMMANDS[i], COMMANDS_DESC[i]) + '\n\n'
     HELP_MESSAGE += '```'
@@ -290,34 +303,44 @@ async def on_ready():
 
 @CLIENT.event
 async def on_message(message):
-    global BOT_PREFIX, COMMANDS, HELP_MESSAGE, E_SCAN_KEY, VALUES, CONTRACT_ADDRESSES
+    global BOT_PREFIX, COMMANDS, VALUES, CONTRACT_ADDRESSES, USER_TIME_ELAPSED_MAP, GAS_CACHE
     if message.author == CLIENT.user:
         return
 
-    if message.content[0] == BOT_PREFIX:
-        message.content = str(message.content)[1:]
+    if message.content.startswith(BOT_PREFIX):
+        message.content = message.content[len(BOT_PREFIX):]
         command_param = message.content.split()
 
-        if message.content == COMMANDS[len(COMMANDS) - 3]:  # help command
-            await message.channel.send(HELP_MESSAGE)
+        if message.content in COMMANDS or command_param[0] in COMMANDS:
+            sender = message.author.id
+            cur_epoch = int(time.time())
+            if sender not in USER_TIME_ELAPSED_MAP:
+                USER_TIME_ELAPSED_MAP[sender] = cur_epoch
+            elif cur_epoch - USER_TIME_ELAPSED_MAP[sender] <= 5:
+                await message.channel.send('Please wait 5 seconds before using a command again.')
+                return
+            USER_TIME_ELAPSED_MAP[sender] = cur_epoch
 
-        elif message.content == COMMANDS[len(COMMANDS) - 2]:  # eth price
-            await post_to_discord_obj.eth_price(message)
+            if message.content == COMMANDS[len(COMMANDS) - 3]:  # help command
+                await message.channel.send(HELP_MESSAGE)
 
-        elif message.content == COMMANDS[len(COMMANDS) - 1]:  # gas tracker
-            await post_to_discord_obj.gas_tracker(message, E_SCAN_KEY)
+            elif message.content == COMMANDS[len(COMMANDS) - 2]:  # eth price
+                await post_to_discord_obj.eth_price(message)
 
-        elif message.content == ('{}'.format(COMMANDS[0])):  # custom command 1
-            await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
+            elif message.content == COMMANDS[len(COMMANDS) - 1]:  # gas tracker
+                await post_to_discord_obj.gas_tracker(message, GAS_CACHE)
 
-        elif command_param[0] == ('{}'.format(COMMANDS[1])):  # custom command 2
-            await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
+            elif message.content == ('{}'.format(COMMANDS[0])):  # custom command 1
+                await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
 
-        elif message.content == ('{}'.format(COMMANDS[2])):  # custom command 3
-            await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
+            elif command_param[0] == ('{}'.format(COMMANDS[1])):  # custom command 2
+                await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
 
-        elif command_param[0] == ('{}'.format(COMMANDS[3])):  # custom command 4
-            await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
+            elif message.content == ('{}'.format(COMMANDS[2])):  # custom command 3
+                await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
+
+            elif command_param[0] == ('{}'.format(COMMANDS[3])):  # custom command 4
+                await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
 
         else:
             closest_words = difflib.get_close_matches(message.content, COMMANDS)
@@ -328,18 +351,22 @@ async def on_message(message):
 
 
 async def update_gas_presence():
-    global CLIENT, BOT_PREFIX, E_SCAN_KEY
+    global CLIENT, BOT_PREFIX, E_SCAN_KEY, GAS_CACHE
     await CLIENT.wait_until_ready()
     while not CLIENT.is_closed():
         gas_tracker_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'.format(E_SCAN_KEY)
         try:
             gas_tracker_request = requests.get(gas_tracker_url, timeout=2)
             gas = gas_tracker_request.json()['result']
-            slow_gas = gas['SafeGasPrice']
-            avg_gas = gas['ProposeGasPrice']
             fast_gas = gas['FastGasPrice']
+            avg_gas = gas['ProposeGasPrice']
+            slow_gas = gas['SafeGasPrice']
             await CLIENT.change_presence(activity=discord.Game(
                 name='⚡ {} | 🚶 {} | 🐢 {} | {}help'.format(fast_gas, avg_gas, slow_gas, BOT_PREFIX)))
+            GAS_CACHE.clear()
+            GAS_CACHE.append(fast_gas)
+            GAS_CACHE.append(avg_gas)
+            GAS_CACHE.append(slow_gas)
             print('Gas updated.', flush=True)
         except Exception as e:
             print(e, flush=True)

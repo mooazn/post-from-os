@@ -15,7 +15,8 @@ ex = ManageManager('Discord Values .txt')
 # OS API Key
 # EtherScan API Key
 # Bot prefix or None
-# Command Description (surrounded with double quotes)
+# Command Command Description (surrounded with double quotes). Command Description MUST end with 'To use, type: [usage]'
+# where [usage] is showing how to use the command
 
 # for example:
 # -----discord_values.txt-----
@@ -27,7 +28,7 @@ ex = ManageManager('Discord Values .txt')
 # OS API key
 # EtherScan API Key
 # ! or ? or >> or... etc.
-# example "this is an example command"
+# example "this is an example command. To use, type: !command"
 
 # example instantiator:
 mm = ManageManager('discord_values_yachts.txt')
