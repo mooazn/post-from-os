@@ -100,6 +100,10 @@ class _PostFromOpenSeaTwitter:
             return False
 
     def parse_response_objects(self):
+        if len(self.tx_queue) > 0:
+            queue_has_objects = self.process_queue()
+            if queue_has_objects:
+                return True
         for i in range(0, self.os_limit):
             try:
                 try:
@@ -156,19 +160,20 @@ class _PostFromOpenSeaTwitter:
                 index += 1
         if len(self.tx_queue) == 0:
             return False
-        self.os_obj_to_post = self.tx_queue[0]
+        self.os_obj_to_post = self.tx_queue[-1]
         return True
 
     def download_image(self):
         if self.os_obj_to_post.image_url is None:
             return True
+        img = open(self.file_name, 'wb')
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=1)
-            img = open(self.file_name, 'wb')
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=3)
             img.write(img_response.content)
             img.close()
             return True
         except Exception as e:
+            img.close()
             print(e, flush=True)
             return False
 
@@ -272,12 +277,12 @@ class _PostFromOpenSeaTwitter:
             return -1
 
     def post_to_twitter(self):
+        image = open(self.file_name, 'rb')
         try:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
                 self.os_obj_to_post.is_posted = True
                 return True
-            image = open(self.file_name, 'rb')
             response = self.twitter.upload_media(media=image)
             image.close()
             media_id = [response['media_id']]
@@ -286,6 +291,7 @@ class _PostFromOpenSeaTwitter:
             self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
             return True
         except Exception as e:
+            image.close()
             print(e, flush=True)
             return False
 

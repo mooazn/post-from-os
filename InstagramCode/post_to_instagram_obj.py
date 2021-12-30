@@ -82,6 +82,10 @@ class _PostFromOpenSeaInstagram:
             return False
 
     def parse_response_objects(self):
+        if len(self.tx_queue) > 0:
+            queue_has_objects = self.process_queue()
+            if queue_has_objects:
+                return True
         for i in range(0, self.limit):
             base = self.response.json()['asset_events'][i]
             asset = base['asset']
@@ -140,7 +144,7 @@ class _PostFromOpenSeaInstagram:
                 index += 1
         if len(self.tx_queue) == 0:
             return False
-        self.os_obj_to_post = self.tx_queue[0]
+        self.os_obj_to_post = self.tx_queue[-1]
         return True
 
     def download_image(self):
@@ -150,13 +154,14 @@ class _PostFromOpenSeaInstagram:
                 self.tomorrow = int(time.time()) + 86400
             else:
                 return -1
+        img = open(self.file_name, "wb")
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=2)
-            img = open(self.file_name, "wb")
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=3)
             img.write(img_response.content)
             img.close()
             return True
         except Exception as e:
+            img.close()
             print(e, flush=True)
             return False
 

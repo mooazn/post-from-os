@@ -105,6 +105,10 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             return False
 
     def parse_response_objects(self):  # parses {limit} objects
+        if len(self.tx_queue) > 0:
+            queue_has_objects = self.process_queue()
+            if queue_has_objects:
+                return True
         for i in range(0, self.os_limit):
             try:
                 try:
@@ -161,7 +165,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                 index += 1
         if len(self.tx_queue) == 0:
             return False
-        self.os_obj_to_post = self.tx_queue[0]
+        self.os_obj_to_post = self.tx_queue[-1]
         return True
 
     def create_rare_trait_list(self, token_id):
@@ -201,6 +205,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                 self.tumblr.create_text(self.blog_name, state='published', tags=self.tumblr_tags,
                                         body=self.os_obj_to_post.tumblr_caption)
                 self.os_obj_to_post.is_posted = True
+                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
                 return True
             self.tumblr.create_photo(self.blog_name, state='published', tags=self.tumblr_tags,
                                      source=self.os_obj_to_post.image_url, caption=self.os_obj_to_post.tumblr_caption)
