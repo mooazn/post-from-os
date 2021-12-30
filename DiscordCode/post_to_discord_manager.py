@@ -40,6 +40,7 @@ class ManageManager:
         discord_token = test_discord_values.readline().strip()
         collection_names_test = test_discord_values.readline().split('|')
         if len(collection_names_test) > 5:
+            test_discord_values.close()
             raise Exception('Too many collections. Please create a new bot for every 5 collections.')
         for collection_name_test in collection_names_test:
             test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'. \
@@ -67,6 +68,7 @@ class ManageManager:
                 for _ in sales_listings_channel:
                     total_channels += 1
                     if total_channels > 5:
+                        test_discord_values.close()
                         raise Exception('Too many channels utilized. PLease create a new bot for every 5 channels.')
         try:
             if len(sales_listings_channels) > 0:
@@ -76,6 +78,7 @@ class ManageManager:
                     try:
                         cur_contract_address = self.contract_addresses[index]
                     except IndexError:
+                        test_discord_values.close()
                         raise Exception('The collection names should match the channels. There should ONLY be 1 name '
                                         'for every 1-2 channels')
                     sales_channel = int(sales_listings_channel[0])
@@ -108,6 +111,7 @@ class ManageManager:
         print('Channels validated.')
         test_discord_embed_icons = test_discord_values.readline().strip().split('|')
         if len(test_discord_embed_icons) != len(collection_names_test):
+            test_discord_values.close()
             raise Exception('Number of icons must match the number of collections.')
         index = 0
         for test_discord_embed_icon in test_discord_embed_icons:
@@ -118,22 +122,26 @@ class ManageManager:
                     valid_image = True
                     break
             if not valid_image:
+                test_discord_values.close()
                 raise Exception('The Discord embed icon should be a valid image.')
             self.values[self.contract_addresses[index]].append(test_discord_embed_icon.strip())
             index += 1
         print('Discord embed icon validated...')
         test_rgb_values = test_discord_values.readline().strip().split('|')
         if len(test_rgb_values) != len(collection_names_test):
+            test_discord_values.close()
             raise Exception('Number of RGB values must match the number of collections.')
         index = 0
         for test_rgb_value in test_rgb_values:
             test_rgb_value = test_rgb_value.split()
             if len(test_rgb_value) != 3:
+                test_discord_values.close()
                 raise Exception('Invalid RGB values provided.')
             r = int(test_rgb_value[0])
             g = int(test_rgb_value[1])
             b = int(test_rgb_value[2])
             if not (0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255):
+                test_discord_values.close()
                 raise Exception('Invalid RGB codes. Must be between 0 and 255.')
             self.values[self.contract_addresses[index]].append([r, g, b])
             index += 1
@@ -155,6 +163,7 @@ class ManageManager:
             format(test_ether_scan_key)
         test_ether_scan_response = requests.get(test_ether_scan_url, timeout=1)
         if test_ether_scan_response.json()['message'] == 'NOTOK':
+            test_discord_values.close()
             raise Exception('Invalid Ether Scan key.')
         E_SCAN_KEY = test_ether_scan_key
         print('Ether Scan key validated...')
@@ -180,18 +189,22 @@ class ManageManager:
                         if 'To use, type: ' in desc:
                             usage = desc.split('To use, type: ')[1]
                             if not usage.startswith(BOT_PREFIX):
-                                raise Exception('Custom command does not begin with the provided prefix.')
+                                test_discord_values.close()
+                                raise Exception('Custom command prefix does not begin with the provided prefix.')
                         else:
+                            test_discord_values.close()
                             raise Exception('Command descriptions must always end in this format: \'To use, type: '
-                                            '[usage]')
+                                            '[BOT_PREFIX][usage]\'')
                         COMMANDS_DESC.append(desc)
                         index = end_index
                     else:
                         COMMANDS.append(word)
                     index += 1
                 if len(COMMANDS) != len(COMMANDS_DESC):
+                    test_discord_values.close()
                     raise Exception('Number of commands do not match number of descriptions.')
             except Exception as e:  # catch any error
+                test_discord_values.close()
                 print(e)
                 raise Exception('Commands are formatted incorrectly. Please list the command followed by a short '
                                 'description and usage (surrounded by quotes). For example: command \"This command '
@@ -219,12 +232,7 @@ class ManageManager:
     def generate_asynchronous_code(self):
         index = 0
         space = ' ' * 4
-        code_file = open('asynchronous_discord_code.py', 'w')
-        code_file.write(
-            '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
-            \n\n''')
-        for _ in self.values.items():
-            sales_boiler_plate_code = '''
+        sales_boiler_plate_code = '''
     await client.wait_until_ready()
     channel = client.get_channel(sales_channel)
     while not client.is_closed():
@@ -242,7 +250,7 @@ class ManageManager:
         else:
             await asyncio.sleep(10)
             '''
-            listings_boiler_plate_code = '''
+        listings_boiler_plate_code = '''
     await client.wait_until_ready()
     channel = client.get_channel(listings_channel)
     while not client.is_closed():
@@ -260,6 +268,11 @@ class ManageManager:
         else:
             await asyncio.sleep(10)
             '''
+        code_file = open('asynchronous_discord_code.py', 'w')
+        code_file.write(
+            '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
+            \n\n''')
+        for _ in self.values.items():
             code_file.write('''async def process_sales_{}(client, sales_obj, sales_channel):'''.format(index))
             code_file.write(sales_boiler_plate_code + '\n\n')
             if self.has_listings[index]:
