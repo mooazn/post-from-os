@@ -1,8 +1,8 @@
-from get_collection_assets import ScrapeCollectionTraits
+from get_collection_assets import RetrieveCollectionTraits
 
-ex = ScrapeCollectionTraits('Collection Name', 123)
+ex = RetrieveCollectionTraits('Collection Name', 123)
 
-# This file scrapes traits for the provided collection. The parameters are explained below:
+# This file retrieves traits for the provided collection. The parameters are explained below:
 
 # The first parameter is the collection slug, or collection name, of the NFT collection. this MUST match what you see
 # on the main page of the collection on OpenSea. The easiest way is to extract the name from the URL. for example:
@@ -17,4 +17,4 @@ ex = ScrapeCollectionTraits('Collection Name', 123)
 # really only makes sense to use for projects that have finished minting completely so you get accurate results.
 
 # Ex.
-sct = ScrapeCollectionTraits('thehumanoids', 10000)
+sct = RetrieveCollectionTraits('thehumanoids', 10000)

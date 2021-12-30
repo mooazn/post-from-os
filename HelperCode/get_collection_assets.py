@@ -33,7 +33,7 @@ def validate_params(name, count):
     print('Collection count validated...')
 
 
-class ScrapeCollectionTraits:
+class RetrieveCollectionTraits:
     def __init__(self, collection_name, collection_count=5000):
         collection_count += 1
         validate_params(collection_name, collection_count)
