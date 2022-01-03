@@ -178,36 +178,40 @@ class _PostFromOpenSeaInstagram:
             self.image_link = image_url + 'jpg'
 
     def post_to_instagram(self):
-        user_access_token_file = open(self.instagram_access_token_file, 'r')
-        user_access_token = user_access_token_file.readline()
-        user_access_token_file.close()
+        try:
+            user_access_token_file = open(self.instagram_access_token_file, 'r')
+            user_access_token = user_access_token_file.readline()
+            user_access_token_file.close()
 
-        querystring = {"access_token": user_access_token}
-        headers = {"Accept": "application/json"}
-        response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=2)
-        insta_id = response.json()['instagram_business_account']['id']
+            querystring = {"access_token": user_access_token}
+            headers = {"Accept": "application/json"}
+            response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=2)
+            insta_id = response.json()['instagram_business_account']['id']
 
-        pre_upload_url = self.graph_api_url + '{}/media'.format(insta_id)
-        pre_upload = {'image_url': self.image_link,
-                      'caption': self.os_obj_to_post.insta_caption,
-                      'access_token': user_access_token}
-        pre_upload_request = requests.post(pre_upload_url, data=pre_upload, timeout=2)
-        pre_upload_result = pre_upload_request.json()
+            pre_upload_url = self.graph_api_url + '{}/media'.format(insta_id)
+            pre_upload = {'image_url': self.image_link,
+                          'caption': self.os_obj_to_post.insta_caption,
+                          'access_token': user_access_token}
+            pre_upload_request = requests.post(pre_upload_url, data=pre_upload, timeout=10)
+            pre_upload_result = pre_upload_request.json()
 
-        if 'id' in pre_upload_result:
-            creation_id = pre_upload_result['id']
-            publish_url = self.graph_api_url + '{}/media_publish'.format(insta_id)
-            publish = {
-                'creation_id': creation_id,
-                'access_token': user_access_token
-            }
-            requests.post(publish_url, data=publish, timeout=2)
-            self.os_obj_to_post.is_posted = True
-            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
-            self.daily_posts += 1
-            return True
-        else:
-            print(pre_upload_result, flush=True)
+            if 'id' in pre_upload_result:
+                creation_id = pre_upload_result['id']
+                publish_url = self.graph_api_url + '{}/media_publish'.format(insta_id)
+                publish = {
+                    'creation_id': creation_id,
+                    'access_token': user_access_token
+                }
+                requests.post(publish_url, data=publish, timeout=10)
+                self.os_obj_to_post.is_posted = True
+                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+                self.daily_posts += 1
+                return True
+            else:
+                print(pre_upload_result, flush=True)
+                return False
+        except Exception as e:
+            print(e, flush=True)
             return False
 
 
@@ -345,7 +349,7 @@ class ManageFlowObj:
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            if int(time.time()) - self.begin_time >= 3600 * 24 * 20:
+            if int(time.time()) - self.begin_time >= 3600 * 24 * 55:
                 self.gen_long_lived_token_class.send_email_to_manually_change_user_token()
             # time_now = int(time.time())
             # time_elapsed_since_token_generated = None
