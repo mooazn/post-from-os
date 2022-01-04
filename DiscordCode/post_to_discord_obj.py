@@ -313,7 +313,7 @@ async def custom_command_1(message, values, contract_address):
         floor_price_usd = round((floor_price_eth * eth_price_usd), 2)
         await message.channel.send('The floor for the collection is `Ξ{} (${})`. This might not be accurate, to see the'
                                    ' actual floor price, please visit the collection on Opensea: '
-                                   'https://opensea.io/collection/{}'.format(floor_price_eth, floor_price_usd, name))
+                                   '<https://opensea.io/collection/{}>'.format(floor_price_eth, floor_price_usd, name))
     except Exception as e:
         print(e, flush=True)
         await message.channel.send('Something went wrong. Please try again later.')

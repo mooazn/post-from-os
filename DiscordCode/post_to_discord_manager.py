@@ -298,6 +298,7 @@ class ManageManager:
 @CLIENT.event
 async def on_ready():
     global HELP_MESSAGE, COMMANDS, COMMANDS_DESC, BOT_PREFIX
+    print('Logging in and setting up help command...')
     COMMANDS.append('help')
     COMMANDS.append('eth')
     COMMANDS.append('gas')
@@ -311,7 +312,6 @@ async def on_ready():
     for i in range(0, len(COMMANDS_DESC)):
         HELP_MESSAGE += 'Custom command: \'{}\'. {}'.format(COMMANDS[i], COMMANDS_DESC[i]) + '\n\n'
     HELP_MESSAGE += '```'
-    print('Logging in and setting up help command...')
 
 
 @CLIENT.event
@@ -343,16 +343,16 @@ async def on_message(message):
             elif message.content == COMMANDS[len(COMMANDS) - 1]:  # gas tracker
                 await post_to_discord_obj.gas_tracker(message, GAS_CACHE)
 
-            elif message.content == ('{}'.format(COMMANDS[0])):  # custom command 1
+            elif message.content == ('{}'.format(COMMANDS[0])):  # custom command 1 - floor price
                 await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[0])
 
-            elif command_param[0] == ('{}'.format(COMMANDS[1])):  # custom command 2
+            elif command_param[0] == ('{}'.format(COMMANDS[1])):  # custom command 2 - post asset
                 await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[0])
 
-            elif message.content == ('{}'.format(COMMANDS[2])):  # custom command 3
+            elif message.content == ('{}'.format(COMMANDS[2])):  # custom command 3 - floor price
                 await post_to_discord_obj.custom_command_1(message, VALUES, CONTRACT_ADDRESSES[1])
 
-            elif command_param[0] == ('{}'.format(COMMANDS[3])):  # custom command 4
+            elif command_param[0] == ('{}'.format(COMMANDS[3])):  # custom command 4 - post asset
                 await post_to_discord_obj.custom_command_2(message, VALUES, CONTRACT_ADDRESSES[1])
 
         else:
