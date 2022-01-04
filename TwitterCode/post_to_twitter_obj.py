@@ -227,7 +227,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
     def process_via_ether_scan(self):
         try:
-            get_tx_hash_params = {
+            tx_transfer_params = {
                 'module': 'account',
                 'action': 'tokennfttx',
                 'contractaddress': self.contract_address,
@@ -238,8 +238,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 'page': 1,
                 'offset': self.ether_scan_limit
             }
-            get_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
-            tx_response = get_tx_request.json()
+            get_tx_transfer_request = requests.get(self.ether_scan_api_url, params=tx_transfer_params, timeout=1.5)
+            tx_response = get_tx_transfer_request.json()
             for i in range(0, self.ether_scan_limit):
                 tx_response_base = tx_response['result'][i]
                 token_id = tx_response_base['tokenID']
@@ -250,27 +250,26 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 if i + 1 != self.ether_scan_limit:  # check if next tx has is same as this one's
                     next_tx_hash = str(tx_response['result'][i + 1]['hash'])
                     if tx_hash == next_tx_hash:
-                        self.tx_db.insert({'tx': tx_hash})
                         continue
                 else:  # if we are at the end of the list: fetch the api again, increase offset by 1, and check if same
-                    get_tx_hash_params['offset'] += 1
-                    get_new_tx_request = requests.get(self.ether_scan_api_url, params=get_tx_hash_params, timeout=1.5)
-                    new_tx_response = get_new_tx_request.json()
-                    next_tx_hash = str(new_tx_response['result'][i + 1]['hash'])
-                    if tx_hash == next_tx_hash:
-                        self.tx_db.insert({'tx': tx_hash})
+                    tx_transfer_params['offset'] += 1
+                    get_new_tx_transfer_request = requests.get(self.ether_scan_api_url, params=tx_transfer_params,
+                                                               timeout=1.5)
+                    new_tx_response = get_new_tx_transfer_request.json()
+                    next_tx_transfer_hash = str(new_tx_response['result'][i + 1]['hash'])
+                    if tx_hash == next_tx_transfer_hash:
                         continue
                 from_address = tx_response_base['from']
                 if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
                     continue
-                tx_receipt_params = {
+                tx_hash_params = {
                     'module': 'proxy',
                     'action': 'eth_getTransactionByHash',
                     'txhash': tx_hash,
                     'apikey': self.ether_scan_api_key
                 }
-                get_tx_details_request = requests.get(self.ether_scan_api_url, params=tx_receipt_params, timeout=1.5)
-                tx_details_response_base = get_tx_details_request.json()['result']
+                get_tx_hash_request = requests.get(self.ether_scan_api_url, params=tx_hash_params, timeout=1.5)
+                tx_details_response_base = get_tx_hash_request.json()['result']
                 tx_eth_hex_value = tx_details_response_base['value']
                 tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
                 eth_price_params = {
@@ -284,6 +283,20 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                 input_type = tx_details_response_base['input']
                 if input_type.startswith('0xab834bab'):  # this is an atomic match! (check ether scan logs)
+                    if tx_eth_value == 0.0:  # check if ETH value of atomic match is 0.0 -> this means it's a bid!
+                        tx_hash_params = {
+                            'module': 'proxy',
+                            'action': 'eth_getTransactionReceipt',
+                            'txhash': tx_hash,
+                            'apikey': self.ether_scan_api_key
+                        }
+                        get_tx_receipt_request = requests.get(self.ether_scan_api_url, params=tx_hash_params,
+                                                              timeout=1.5)
+                        first_log = get_tx_receipt_request.json()['result']['logs'][0]
+                        data = first_log['data']
+                        if data != '0x':
+                            tx_eth_value = float(int(data, 16) / 1e18)
+                            usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                     name = '{} #{}'.format(self.ether_scan_name, token_id)
                     asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
                     rare_trait_list = []
