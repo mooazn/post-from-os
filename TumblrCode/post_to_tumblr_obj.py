@@ -1,19 +1,14 @@
-import sys
-sys.path.append('../')
-import datetime  # noqa: E402
-from fake_useragent import UserAgent  # noqa: E402
-from HelperCode import find_file  # noqa: E402
-from operator import itemgetter  # noqa: E402
-import pytumblr  # noqa: E402
-import requests  # noqa: E402
-from requests.structures import CaseInsensitiveDict  # noqa: E402
-import time  # noqa: E402
-from tinydb import TinyDB, Query  # noqa: E402
+import datetime
+from fake_useragent import UserAgent
+import pytumblr
+import requests
+from requests.structures import CaseInsensitiveDict
+import time
+from tinydb import TinyDB, Query
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, num_of_assets_,
-                 tx_hash_):
+    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, num_of_assets_, tx_hash_):
         self.tumblr_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -21,7 +16,6 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.total_usd_cost = total_usd_cost_
         self.link = link_
         self.is_posted = False
-        self.rare_trait_list = rare_trait_list_
         self.num_of_assets = num_of_assets_
         self.tx_hash = tx_hash_
 
@@ -30,22 +24,11 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         if self.num_of_assets > 1:
             self.tumblr_caption = '{}\n{} assets bought for Ξ{} (${})\n'.\
                 format(self.name, self.num_of_assets, self.eth_nft_price, self.total_usd_cost)
-        remaining_characters = 140 - len(self.tumblr_caption) - len(self.link)
-        if self.rare_trait_list:
-            if remaining_characters >= 13 and len(self.rare_trait_list) != 0:
-                self.tumblr_caption += 'Rare Traits:\n'
-                full_rare_trait_sentence = ''
-                for rare_trait in self.rare_trait_list:
-                    next_rare_trait_sentence = '{}: {} - {}%\n'.format(rare_trait[0], rare_trait[1], str(rare_trait[2]))
-                    if len(next_rare_trait_sentence) + len(full_rare_trait_sentence) > remaining_characters:
-                        break
-                    full_rare_trait_sentence += next_rare_trait_sentence
-                self.tumblr_caption += full_rare_trait_sentence
         self.tumblr_caption += '\n\n' + self.link + '\n\n'
 
 
 class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes both OpenSea API and Tumblr API
-    def __init__(self, address, supply, values_file, trait_db_name):  # initialize all the fields
+    def __init__(self, address, supply, values_file):  # initialize all the fields
         tumblr_values_file = values_file
         values = open(tumblr_values_file, 'r')
         self.tags = values.readline().strip().split()
@@ -68,10 +51,6 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
         self.os_obj_to_post = None
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_tumblr_db.json')
         self.tx_query = Query()
-        self.trait_db_name = trait_db_name
-        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
-            self.trait_db = TinyDB(self.trait_db_name)
-            self.trait_query = Query()
         self.tx_queue = []
         self.os_limit = 10
         self.ether_scan_limit = int(self.os_limit * 1.5)
@@ -128,7 +107,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                     link = bundle['permalink']
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
-                    transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, [],
+                    transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
                                                             num_of_assets, tx_hash)
                     transaction.create_tumblr_caption()
                     self.tx_queue.append(transaction)
@@ -139,18 +118,13 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             except TypeError:
                 continue
             try:
-                token_id = asset['token_id']
                 eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
                 usd_price = float(base['payment_token']['usd_price'])
                 total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
                 link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            rare_trait_list = []
-            if type(self.trait_db_name) == str or self.trait_db_name is True:
-                rare_trait_list = self.create_rare_trait_list(token_id)
-            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                    rare_trait_list, 1, tx_hash)
+            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, 1, tx_hash)
             transaction.create_tumblr_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -167,37 +141,6 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             return False
         self.os_obj_to_post = self.tx_queue[-1]
         return True
-
-    def create_rare_trait_list(self, token_id):
-        try:
-            rare_trait_list = []
-            traits = None
-            if self.trait_db_name is not None and type(self.trait_db_name) != bool:
-                asset_from_db = self.trait_db.search(self.trait_query.id == int(token_id))
-                if asset_from_db:
-                    traits = eval(asset_from_db[0]['traits'])
-            if traits is None:
-                asset_url = self.os_asset_url + self.contract_address + '/' + token_id
-                asset_headers = CaseInsensitiveDict()
-                asset_headers['User-Agent'] = self.ua.random
-                asset_headers['x-api-key'] = self.os_api_key
-                asset_response = requests.get(asset_url, headers=asset_headers, timeout=1.5)
-                if asset_response.status_code == 200:
-                    traits = asset_response.json()['traits']
-            if traits is None:
-                return
-            for trait in traits:
-                trait_type = trait['trait_type']
-                trait_value = trait['value']
-                trait_count = trait['trait_count']
-                rarity_decimal = float(trait_count / self.total_supply)
-                if rarity_decimal <= 0.05:
-                    rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
-            rare_trait_list.sort(key=itemgetter(2))
-            return rare_trait_list
-        except Exception as e:
-            print(e, flush=True)
-            return
 
     def post_to_tumblr(self):  # uploads to Tumblr
         try:
@@ -218,14 +161,12 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
 
 
 class ManageFlowObj:  # Main class which does all of the operations
-    def __init__(self, tumblr_values_file, trait_db_name=None):
+    def __init__(self, tumblr_values_file):
         self.tumblr_values_file = tumblr_values_file
-        self.trait_db_name = trait_db_name
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
-        self.trait_db_name = collection_stats[2]
-        self.__base_obj = _PostFromOpenSeaTumblr(cont_address, supply, self.tumblr_values_file, self.trait_db_name)
+        self.__base_obj = _PostFromOpenSeaTumblr(cont_address, supply, self.tumblr_values_file)
         self._begin()
 
     def validate_params(self):
@@ -300,18 +241,8 @@ class ManageFlowObj:  # Main class which does all of the operations
         else:
             print('No OpenSea API Key supplied...')
         print('Validation of Tumblr Values .txt complete. No errors found...')
-        trait_db = self.trait_db_name
-        if self.trait_db_name is not None and type(self.trait_db_name) != bool:
-            if not str(self.trait_db_name).lower().endswith('.json'):
-                raise Exception('Trait DB must end with a .json file extension.')
-            trait_db = find_file.find(self.trait_db_name)
-            if trait_db is None:
-                raise Exception('Trait DB .json not found. Either type the name correctly or remove the parameter.')
-            print('Validation of Trait DB Name .json complete. No errors found...')
-        else:
-            print('Skipping Trait DB Name .json. No file was provided.')
         print('All files are validated. Beginning program...')
-        return [contract_address, total_supply, trait_db]
+        return [contract_address, total_supply]
 
     def run_methods(self, date_time_now):  # runs all the methods
         self.check_os_api_status(date_time_now)
