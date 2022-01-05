@@ -63,8 +63,6 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
         self.ua = UserAgent()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
-        if self.os_api_key == 'None':
-            return False
         try:
             query_strings = {
                 'asset_contract_address': self.contract_address,
@@ -77,7 +75,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            self.response = requests.get(self.os_events_url, headers=headers, params=query_strings, timeout=1)
+            self.response = requests.get(self.os_events_url, headers=headers, params=query_strings, timeout=3)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -200,7 +198,7 @@ class ManageFlowObj:  # Main class which does all of the operations
         print('Hashtags validated...')
         collection_name_test = values_file_test.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.get(test_collection_name_url, timeout=1)
+        test_response = requests.get(test_collection_name_url)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             stats_json = collection_json['stats']
@@ -228,18 +226,15 @@ class ManageFlowObj:  # Main class which does all of the operations
             raise Exception('Invalid Tumblr Keys supplied.')
         print('Tumblr credentials validated...')
         test_os_key = values_file_test.readline().strip()
-        if test_os_key != 'None':
-            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
-            test_os_headers = CaseInsensitiveDict()
-            test_os_headers['Accept'] = 'application/json'
-            test_os_headers['x-api-key'] = test_os_key
-            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
-            if test_os_response.status_code != 200:
-                values_file_test.close()
-                raise Exception('Invalid OpenSea API key supplied.')
-            print('OpenSea Key validated...')
-        else:
-            print('No OpenSea API Key supplied...')
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = test_os_key
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
+        if test_os_response.status_code != 200:
+            values_file_test.close()
+            raise Exception('Invalid OpenSea API key supplied.')
+        print('OpenSea Key validated...')
         print('Validation of Tumblr Values .txt complete. No errors found...')
         print('All files are validated. Beginning program...')
         return [contract_address, total_supply]

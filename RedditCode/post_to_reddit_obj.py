@@ -73,7 +73,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
-            self.response = requests.request("GET", self.os_events_url, headers=headers, params=querystring)
+            self.response = requests.request("GET", self.os_events_url, headers=headers, params=querystring, timeout=3)
             return self.response.status_code == 200
         except Exception as e:
             print(e, flush=True)
@@ -140,7 +140,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
 
     def download_image(self):  # downloads the image to upload
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True)
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=3)
             img = open(self.file_name, "wb")
             img.write(img_response.content)
             img.close()
@@ -172,6 +172,13 @@ class ManageFlowObj:  # Main class which does all of the operations
         self._begin()
 
     def validate_params(self):
+        print('Beginning validation of Reddit Values File...')
+        if not str(self.reddit_values_file).lower().endswith('.txt'):
+            raise Exception('Reddit Values must be a .txt file.')
+        with open(self.reddit_values_file) as values_file:
+            if len(values_file.readlines()) != 7:
+                raise Exception('The Reddit Values file must be formatted correctly.')
+        print('Number of lines validated.')
         values_file_test = open(self.reddit_values_file, 'r')
         collection_name_test = values_file_test.readline().strip()
         client_id_test = values_file_test.readline().strip()
@@ -203,6 +210,16 @@ class ManageFlowObj:  # Main class which does all of the operations
         except prawcore.exceptions.ResponseException:
             values_file_test.close()
             raise Exception('Invalid keys supplied for Reddit API.')
+        test_os_key = values_file_test.readline().strip()
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = test_os_key
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
+        if test_os_response.status_code != 200:
+            values_file_test.close()
+            raise Exception('Invalid OpenSea API key supplied.')
+        print('OpenSea Key validated...')
         values_file_test.close()
         print('Validation of Reddit Values .txt complete. No errors found...')
         print('All files are validated. Beginning program...')

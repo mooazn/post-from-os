@@ -25,7 +25,7 @@ ex = ManageFlowObj('Tumblr Values .txt')
 # tumblr_consumer_secret
 # tumblr_oauth_token
 # tumblr_oauth_token_secret
-# OS API key OR None
+# OS API key
 # mycoolblog
 
 # example instantiators:
