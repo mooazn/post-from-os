@@ -5,26 +5,14 @@ import time
 from tinydb import TinyDB, Query
 
 
-# This whole script takes roughly 1 hour to run for a collection with 10k assets. Although that is slow, it's a one time
-# operation for ultra fast operations on getting assets within a collection. It makes sense, you get a 80 MB file out of
-# it! It could be faster with threads. What happens when the owner changes? Here's a simple way to replace the previous
-# owner:
+# This whole script takes roughly a few minutes for a collection with 10k assets. It's a one time
+# operation for ultra fast operations on getting assets and their respective image URLs within a collection and ease
+# of downloading with the EtherScan workaround!
 
-# ID = 10
-# x = TinyDB('db.json')
-# xq = Query()
-# query = x.search(xq.id == ID)
-# base = eval(query[0]['asset_json'])
-# owner = base['owner']
-# prev_address = owner['address']
-# owner['address'] = 'NEW_ADDRESS'
-# x.update({'asset_json': str(base)}, xq.id == ID)
-
-# you can update other fields accordingly
 
 def validate_params(name, count):
     test_coll_url = 'https://api.opensea.io/api/v1/collection/{}'.format(name)
-    test_coll_response = requests.get(test_coll_url)
+    test_coll_response = requests.get(test_coll_url, timeout=2)
     if test_coll_response.status_code != 200:
         raise Exception('Invalid collection name.')
     print('Collection name validated...')
@@ -73,11 +61,28 @@ class RetrieveCollectionTraits:
                 asset_base = asset_response.json()['assets']
                 for asset in asset_base:
                     token_id = asset['token_id']
+                    image_url = asset['image_url']
                     asset_trait_exists = True if len(self.db.search(self.db_query.id == int(token_id))) == 1 else False
                     if asset_trait_exists:
                         print(token_id, 'already exists in DB.')
                         continue
-                    self.db.insert({'id': int(token_id), 'asset_json': str(asset)})
+                    self.db.insert({'id': int(token_id), 'asset_json': str(image_url)})  # you can literally store the
+                    # whole JSON here if you want by replacing image_url with asset. This will take longer to run.
+                    # if you do get the whole JSON, you will likely need to change owners manually during an event.
+                    # here is how:
+
+                    # ID = 10
+                    # x = TinyDB('db.json')
+                    # xq = Query()
+                    # query = x.search(xq.id == ID)
+                    # base = eval(query[0]['asset_json'])
+                    # owner = base['owner']
+                    # prev_address = owner['address']
+                    # owner['address'] = 'NEW_ADDRESS'
+                    # x.update({'asset_json': str(base)}, xq.id == ID)
+
+                    # you can update other fields accordingly
+
                     print(token_id, 'inserted into DB.')
             else:
                 print(asset_response.status_code)
