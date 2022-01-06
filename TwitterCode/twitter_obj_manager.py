@@ -23,7 +23,7 @@ ex = ManageFlowObj('Twitter Values .txt', 'True OR False OR Trait DB.json')
 # twitter_api_key_secret
 # twitter_access_token
 # twitter_access_token_secret
-# OS API key OR None
+# OS API key
 # Etherscan API key Name OR Etherscan API key
 
 # The next provided string (Trait DB Name) is the .json file name for the trait TinyDB. This DB is used to efficiently
