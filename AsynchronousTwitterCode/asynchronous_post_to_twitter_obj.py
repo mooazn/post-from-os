@@ -151,10 +151,19 @@ class _PostFromOpenSeaTwitter:
         return self.process_queue()
 
     def process_queue(self):
+        if len(self.tx_queue) == 1:
+            if self.tx_queue[0].is_posted:
+                self.tx_queue.pop(0)
+                return False
         index = 0
-        while index < len(self.tx_queue):
+        while index + 1 < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
+            next_os_obj = self.tx_queue[index + 1]
             if cur_os_obj.is_posted:
+                self.tx_queue.pop(index)
+            if next_os_obj.is_posted:
+                self.tx_queue.pop(index + 1)
+            elif cur_os_obj.tx_hash == next_os_obj.tx_hash:
                 self.tx_queue.pop(index)
             else:
                 index += 1
@@ -204,6 +213,10 @@ class _PostFromOpenSeaTwitter:
             return
 
     def process_via_ether_scan(self):
+        if len(self.tx_queue) > 0:
+            queue_has_objects = self.process_queue()
+            if queue_has_objects:
+                return True
         try:
             tx_transfer_params = {
                 'module': 'account',

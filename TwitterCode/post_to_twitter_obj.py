@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('../')
 import datetime  # noqa: E402
 from fake_useragent import UserAgent  # noqa: E402
@@ -7,7 +8,7 @@ from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
 import time  # noqa: E402
-from tinydb import database, Query, TinyDB   # noqa: E402
+from tinydb import database, Query, TinyDB  # noqa: E402
 from twython import Twython  # noqa: E402
 import twython.exceptions  # noqa: E402
 
@@ -30,7 +31,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
         if self.num_of_assets > 1:
-            self.twitter_caption = '{}\n{} assets bought for Ξ{} (${})\n'.\
+            self.twitter_caption = '{}\n{} assets bought for Ξ{} (${})\n'. \
                 format(self.name, self.num_of_assets, self.eth_nft_price, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
         # the remaining characters at this stage should roughly be 130-180 characters.
@@ -172,12 +173,23 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return self.process_queue()
 
     def process_queue(self):  # processes the queue thus far
+        if len(self.tx_queue) == 1:  # just 1 element in queue
+            if self.tx_queue[0].is_posted:
+                self.tx_queue.pop(0)
+                return False
         index = 0
-        while index < len(self.tx_queue):
-            cur_os_obj = self.tx_queue[index]
-            if cur_os_obj.is_posted:
+        while index + 1 < len(self.tx_queue):  # check if index + 1 < length: more than 1 element
+            cur_os_obj = self.tx_queue[index]  # get current object
+            next_os_obj = self.tx_queue[index + 1]  # get next object
+            if cur_os_obj.is_posted:  # if current is posted, pop it
                 self.tx_queue.pop(index)
-            else:
+            if next_os_obj.is_posted:  # if next object is posted, pop it as well
+                self.tx_queue.pop(index + 1)
+            elif cur_os_obj.tx_hash == next_os_obj.tx_hash:  # we know that neither have been posted. so check if
+                # tx_hashes are the same. first of all, i am not sure why that happened... anyway, we can pop either
+                # object, pop current object for simplicity and leave 2nd for processing. i dont think it matters
+                self.tx_queue.pop(index)
+            else:  # else (neither are posted and neither tx_hashes are the same) move the index to the next position
                 index += 1
         if len(self.tx_queue) == 0:
             return False
@@ -230,6 +242,10 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return
 
     def process_via_ether_scan(self):
+        if len(self.tx_queue) > 0:
+            queue_has_objects = self.process_queue()
+            if queue_has_objects:
+                return True
         try:
             tx_transfer_params = {
                 'module': 'account',
