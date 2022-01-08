@@ -29,6 +29,12 @@ class _OpenSeaTransactionObjectInstagram:
         self.is_posted = False
         self.tx_hash = tx_hash_
 
+    def __eq__(self, other):
+        return self.tx_hash == other.tx_hash
+
+    def __hash__(self):
+        return hash(('tx_hash', self.tx_hash))
+
     def create_insta_caption(self):
         self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
                              'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} ETH and ' \
@@ -135,19 +141,12 @@ class _PostFromOpenSeaInstagram:
         return self.process_queue()
 
     def process_queue(self):
-        if len(self.tx_queue) == 1:
-            if self.tx_queue[0].is_posted:
-                self.tx_queue.pop(0)
-                return False
         index = 0
-        while index + 1 < len(self.tx_queue):
+        self.tx_queue = list(set(self.tx_queue))
+        while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
-            next_os_obj = self.tx_queue[index + 1]
-            if cur_os_obj.is_posted:
-                self.tx_queue.pop(index)
-            if next_os_obj.is_posted:
-                self.tx_queue.pop(index + 1)
-            elif cur_os_obj.tx_hash == next_os_obj.tx_hash:
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.tx_hash))) == 0 else True
+            if cur_os_obj.is_posted or tx_exists:
                 self.tx_queue.pop(index)
             else:
                 index += 1

@@ -1,5 +1,4 @@
 import sys
-
 sys.path.append('../')
 import datetime  # noqa: E402
 from fake_useragent import UserAgent  # noqa: E402
@@ -27,6 +26,12 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.twitter_tags = twitter_tags_
         self.num_of_assets = num_of_assets_
         self.tx_hash = tx_hash_
+
+    def __eq__(self, other):
+        return self.tx_hash == other.tx_hash
+
+    def __hash__(self):
+        return hash(('tx_hash', self.tx_hash))
 
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
@@ -173,23 +178,14 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return self.process_queue()
 
     def process_queue(self):  # processes the queue thus far
-        if len(self.tx_queue) == 1:  # just 1 element in queue
-            if self.tx_queue[0].is_posted:
-                self.tx_queue.pop(0)
-                return False
         index = 0
-        while index + 1 < len(self.tx_queue):  # check if index + 1 < length: more than 1 element
+        self.tx_queue = list(set(self.tx_queue))  # remove all duplicates (based on transaction hash)
+        while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]  # get current object
-            next_os_obj = self.tx_queue[index + 1]  # get next object
-            if cur_os_obj.is_posted:  # if current is posted, pop it
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.tx_hash))) == 0 else True
+            if cur_os_obj.is_posted or tx_exists:  # if object is posted or we have already seen it, pop
                 self.tx_queue.pop(index)
-            if next_os_obj.is_posted:  # if next object is posted, pop it as well
-                self.tx_queue.pop(index + 1)
-            elif cur_os_obj.tx_hash == next_os_obj.tx_hash:  # we know that neither have been posted. so check if
-                # tx_hashes are the same. first of all, i am not sure why that happened... anyway, we can pop either
-                # object, pop current object for simplicity and leave 2nd for processing. i dont think it matters
-                self.tx_queue.pop(index)
-            else:  # else (neither are posted and neither tx_hashes are the same) move the index to the next position
+            else:  # else move the index to the next position, which means current index is good for processing
                 index += 1
         if len(self.tx_queue) == 0:
             return False
