@@ -178,6 +178,10 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         return self.process_queue()
 
     def process_queue(self):  # processes the queue thus far
+        if len(self.tx_db) > 200:
+            for first in self.tx_db:
+                self.tx_db.remove(doc_ids=[first.doc_id])
+                break
         index = 0
         self.tx_queue = list(set(self.tx_queue))  # remove all duplicates (based on transaction hash)
         while index < len(self.tx_queue):

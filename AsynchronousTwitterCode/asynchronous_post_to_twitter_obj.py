@@ -157,6 +157,10 @@ class _PostFromOpenSeaTwitter:
         return self.process_queue()
 
     def process_queue(self):
+        if len(self.tx_db) > 200:
+            for first in self.tx_db:
+                self.tx_db.remove(doc_ids=[first.doc_id])
+                break
         index = 0
         self.tx_queue = list(set(self.tx_queue))
         while index < len(self.tx_queue):
