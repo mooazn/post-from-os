@@ -126,11 +126,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return False
 
     def parse_response_objects(self):  # parses {limit} objects
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()  # check if there are more objects to be processed
-            if queue_has_objects:  # if there are, return true and then proceed to post the object
-                return True
-        # otherwise, call the API again to see if there are any new objects to add to the queue
         for i in range(0, self.os_limit):
             try:
                 try:
@@ -242,10 +237,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return
 
     def process_via_ether_scan(self):
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()
-            if queue_has_objects:
-                return True
         try:
             tx_transfer_params = {
                 'module': 'account',

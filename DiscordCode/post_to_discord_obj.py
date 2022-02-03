@@ -106,10 +106,6 @@ class _PostFromOpenSeaDiscord:
             return False
 
     def parse_response_objects(self):
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()
-            if queue_has_objects:
-                return True
         for i in range(0, self.limit):
             try:
                 try:

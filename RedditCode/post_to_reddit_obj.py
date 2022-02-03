@@ -86,10 +86,6 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             return False
 
     def parse_response_objects(self):  # parses {limit} objects
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()
-            if queue_has_objects:
-                return True
         for i in range(0, self.limit):
             try:
                 try:

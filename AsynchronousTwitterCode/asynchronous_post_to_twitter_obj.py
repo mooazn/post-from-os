@@ -106,10 +106,6 @@ class _PostFromOpenSeaTwitter:
             return False
 
     def parse_response_objects(self):
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()
-            if queue_has_objects:
-                return True
         for i in range(0, self.os_limit):
             try:
                 try:
@@ -216,10 +212,6 @@ class _PostFromOpenSeaTwitter:
             return
 
     def process_via_ether_scan(self):
-        if len(self.tx_queue) > 0:
-            queue_has_objects = self.process_queue()
-            if queue_has_objects:
-                return True
         try:
             tx_transfer_params = {
                 'module': 'account',
