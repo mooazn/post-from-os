@@ -90,11 +90,11 @@ class _PostFromOpenSeaDiscord:
         else:
             event_type = EventType.CREATED.value
         try:
-            querystring = {'asset_contract_address': self.contract_address,
-                           'event_type': event_type,
-                           'only_opensea': 'false',
-                           'offset': '0',
-                           'limit': self.limit}
+            querystring = {
+                'asset_contract_address': self.contract_address,
+                'event_type': event_type,
+                'only_opensea': 'false'
+            }
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random

@@ -73,9 +73,7 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             query_strings = {
                 'asset_contract_address': self.contract_address,
                 'event_type': 'successful',
-                'only_opensea': 'false',
-                'offset': 0,
-                'limit': self.os_limit
+                'only_opensea': 'false'
             }
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'

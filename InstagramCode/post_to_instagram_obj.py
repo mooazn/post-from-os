@@ -73,11 +73,11 @@ class _PostFromOpenSeaInstagram:
 
     def get_recent_sales(self):
         try:
-            querystring = {"asset_contract_address": self.contract_address,
-                           "event_type": "successful",
-                           "only_opensea": "false",
-                           "offset": "0",
-                           "limit": self.limit}
+            querystring = {
+                "asset_contract_address": self.contract_address,
+                "event_type": "successful",
+                "only_opensea": "false"
+            }
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
             headers['x-api-key'] = self.os_api_key

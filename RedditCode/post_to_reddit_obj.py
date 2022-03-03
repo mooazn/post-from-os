@@ -70,11 +70,11 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
-            querystring = {"asset_contract_address": self.contract_address,
-                           "event_type": "successful",
-                           "only_opensea": "false",
-                           "offset": "0",
-                           "limit": self.limit}
+            querystring = {
+                "asset_contract_address": self.contract_address,
+                "event_type": "successful",
+                "only_opensea": "false"
+            }
             headers = CaseInsensitiveDict()
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
