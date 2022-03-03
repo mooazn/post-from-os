@@ -1,6 +1,6 @@
 from get_collection_assets import RetrieveCollectionTraits
 
-ex = RetrieveCollectionTraits('Collection Name', 123)
+ex = RetrieveCollectionTraits('Collection Name', 'API Key', 123)
 
 # This file retrieves traits for the provided collection. The parameters are explained below:
 
@@ -17,4 +17,4 @@ ex = RetrieveCollectionTraits('Collection Name', 123)
 # really only makes sense to use for projects that have finished minting completely so you get accurate results.
 
 # Ex.
-sct = RetrieveCollectionTraits('thehumanoids', 10000)
+# sct = RetrieveCollectionTraits('thehumanoids', 'API Key', 10000)

@@ -1,6 +1,7 @@
 from fake_useragent import UserAgent
 import math
 import requests
+from requests.structures import CaseInsensitiveDict
 import time
 from tinydb import TinyDB, Query
 
@@ -16,30 +17,35 @@ def validate_params(name, count):
     if test_coll_response.status_code != 200:
         raise Exception('Invalid collection name.')
     print('Collection name validated...')
-    if count < 0 or count > 1000000:
+    if count < 0 or count > 10001:
         raise Exception('Invalid collection count.')
     print('Collection count validated...')
 
 
 class RetrieveCollectionTraits:
-    def __init__(self, collection_name, collection_count=5000):
+    def __init__(self, collection_name, api_key, collection_count=5000):
+        self.api_key = api_key
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = self.api_key
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
+        if test_os_response.status_code != 200:
+            raise Exception('Invalid API Key.')
+        print('API Key Validated.')
         collection_count += 1
         validate_params(collection_name, collection_count)
         print('Parameters are validated. Beginning program...')
         self.db = TinyDB(collection_name + '_db.json')
         self.db_query = Query()
         self.collection_name = collection_name
-        resp_variables = self.send_requests_for_variables()
-        stats_json = resp_variables[0]
-        primary_asset_contracts_json = resp_variables[1]
+        stats_json = self.send_requests_for_variables()
         self.total_supply = int(stats_json['total_supply'])
         self.collection_count = max(collection_count, self.total_supply)
-        self.contract_address = primary_asset_contracts_json['address']
-        self.os_asset_url = 'https://api.opensea.io/api/v1/assets?asset_contract_address={}&order_direction=' \
-                            'asc&offset={}&limit=50'
-        self.start_time = None
-        self.end_time = None
-        self.iteration_num = 1
+        self.os_asset_url = 'https://api.opensea.io/api/v1/assets?order_direction=asc&' \
+                            'collection_slug={}&limit=50&offset={}'
+        self.start_time = 0
+        self.end_time = 0
         self.ua = UserAgent()
         self.get_assets()
         self.print_time_taken()
@@ -49,14 +55,18 @@ class RetrieveCollectionTraits:
         collection_response = requests.get(collection_url)
         collection_json = collection_response.json()['collection']
         stats_json = collection_json['stats']
-        primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]
-        return [stats_json, primary_asset_contracts_json]
+        return stats_json
 
     def get_assets(self):
         self.start_time = time.time()
+        headers = CaseInsensitiveDict()
+        headers['Accept'] = 'application/json'
+        headers['User-Agent'] = UserAgent().random
+        headers['x-api-key'] = self.api_key
         for i in range(0, math.ceil(self.collection_count / 50)):
-            url = self.os_asset_url.format(self.contract_address, i * 50)
-            asset_response = requests.get(url)
+            url = self.os_asset_url.format(self.collection_name, i * 50)
+            asset_response = requests.get(url, headers=headers)
+            print(asset_response.json())
             if asset_response.status_code == 200:
                 asset_base = asset_response.json()['assets']
                 for asset in asset_base:
