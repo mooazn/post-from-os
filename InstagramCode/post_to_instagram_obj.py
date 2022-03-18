@@ -175,15 +175,20 @@ class _PostFromOpenSeaInstagram:
 
     def post_to_image_bb(self):
         with open(self.file_name, "rb") as file:
-            url = "https://api.imgbb.com/1/upload?expiration=60"
-            payload = {
-                "key": self.img_bb_key,
-                "image": base64.b64encode(file.read()),
-            }
-            res = requests.post(url, payload, timeout=2)
-            image_url = str(res.json()['data']['url'])
-            image_url = image_url[:len(image_url) - 3]
-            self.image_link = image_url + 'jpg'
+            try:
+                url = "https://api.imgbb.com/1/upload?expiration=60"
+                payload = {
+                    "key": self.img_bb_key,
+                    "image": base64.b64encode(file.read()),
+                }
+                res = requests.post(url, payload, timeout=3)
+                image_url = str(res.json()['data']['url'])
+                image_url = image_url[:len(image_url) - 3]
+                self.image_link = image_url + 'jpg'
+                return True
+            except Exception as e:
+                print(e, flush=True)
+                return False
 
     def post_to_instagram(self):
         try:
@@ -341,8 +346,12 @@ class ManageFlowObj:
             time.sleep(60)
 
     def post_to_image_bb(self, date_time_now):
-        self.__base_obj.post_to_image_bb()
-        self.try_to_post_to_instagram(date_time_now)
+        posted_to_image_bb = self.__base_obj.post_to_image_bb()
+        if posted_to_image_bb:
+            self.try_to_post_to_instagram(date_time_now)
+        else:
+            print('Posting to image bb error at roughly', date_time_now, flush=True)
+            time.sleep(60)
 
     def try_to_post_to_instagram(self, date_time_now):
         posted_to_instagram = self.__base_obj.post_to_instagram()
