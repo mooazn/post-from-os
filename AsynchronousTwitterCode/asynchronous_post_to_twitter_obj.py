@@ -71,7 +71,7 @@ class _PostFromOpenSeaTwitter:
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_twitter_db_asynchronous.json')
         self.tx_query = Query()
         self.tx_queue = []
-        self.os_limit = 5
+        self.os_limit = 10
         self.ether_scan_limit = int(self.os_limit * 1.5)
         self.twitter = Twython(
             self.twitter_keys[0],
@@ -300,6 +300,7 @@ class _PostFromOpenSeaTwitter:
         try:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
+                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
                 self.os_obj_to_post.is_posted = True
                 return True
             response = self.twitter.upload_media(media=image)

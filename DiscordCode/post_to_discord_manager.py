@@ -1,4 +1,3 @@
-import asynchronous_discord_code
 import asyncio
 import difflib
 import discord
@@ -147,7 +146,7 @@ class ManageManager:
             index += 1
         print('RGB Values validated...')
         test_os_api_key = test_discord_values.readline().strip()
-        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
         test_os_headers = CaseInsensitiveDict()
         test_os_headers['Accept'] = 'application/json'
         test_os_headers['x-api-key'] = test_os_api_key
@@ -221,6 +220,7 @@ class ManageManager:
         values_listing = []
         for ca, v in self.values.items():
             values_listing.append([[v[0], ca, v[2], v[3], v[4]], v[1]])
+        import asynchronous_discord_code  # replace this line with the async file you want it to be called
         asynchronous_discord_code.run(CLIENT, values_listing)
         CLIENT.loop.create_task(update_gas_presence())
         try:
@@ -268,7 +268,8 @@ class ManageManager:
         else:
             await asyncio.sleep(10)
             '''
-        code_file = open('asynchronous_discord_code.py', 'w')
+        code_file = open('asynchronous_discord_code.py', 'w')  # replace this line with the async file you want it to
+        # be called
         code_file.write(
             '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
             \n\n''')

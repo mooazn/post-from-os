@@ -1,4 +1,3 @@
-import asynchronous_twitter_code
 import math
 import requests
 from requests.structures import CaseInsensitiveDict
@@ -7,7 +6,8 @@ import twython.exceptions
 
 
 def generate_asynchronous_code(values_map):
-    create_async_code_file = open('asynchronous_twitter_code.py', 'w')
+    create_async_code_file = open('asynchronous_twitter_code.py', 'w')  # replace this line with the async file you
+    # want it to be called
     create_async_code_file.write('''import asyncio\nfrom asynchronous_post_to_twitter_obj import ManageFlowObj\n\n\n''')
     boiler_plate_code = '''    
     while True:
@@ -75,6 +75,7 @@ class ManageMultipleTwitterPosts:
         self.create_map()
         generate_asynchronous_code(self.values_map)
         print('Beginning program...')
+        import asynchronous_twitter_code  # replace this line with the async file you want it to be called
         asynchronous_twitter_code.run(self.values_map)
 
     def validate_params(self):
@@ -183,7 +184,7 @@ class ManageMultipleTwitterPosts:
         os_keys = test_os_keys.split('|')
         count = 1
         for os_key in os_keys:
-            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
             test_os_headers = CaseInsensitiveDict()
             test_os_headers['Accept'] = 'application/json'
             test_os_headers['x-api-key'] = os_key.strip()

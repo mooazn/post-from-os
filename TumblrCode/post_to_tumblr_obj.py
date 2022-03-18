@@ -232,7 +232,7 @@ class ManageFlowObj:  # Main class which does all of the operations
             raise Exception('Invalid Tumblr Keys supplied.')
         print('Tumblr credentials validated...')
         test_os_key = values_file_test.readline().strip()
-        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false&offset=0&limit=1'
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
         test_os_headers = CaseInsensitiveDict()
         test_os_headers['Accept'] = 'application/json'
         test_os_headers['x-api-key'] = test_os_key
