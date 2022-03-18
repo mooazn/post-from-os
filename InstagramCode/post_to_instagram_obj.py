@@ -186,7 +186,7 @@ class _PostFromOpenSeaInstagram:
                 image_url = image_url[:len(image_url) - 3]
                 self.image_link = image_url + 'jpg'
                 return True
-            except Exception as e:
+            except Exception as e:  # times out
                 print(e, flush=True)
                 return False
 
