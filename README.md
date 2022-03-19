@@ -2,7 +2,7 @@
 
 ### NOTE: The below accounts are ones that I have my code geared towards and have hosted on my VPS. I will continue to create and fix bots for various social media platforms even if I do not use them.
 
-####  Discord Example: https://ibb.co/XXgdFNR
+####  Discord Example: ![Discord Example](https://ibb.co/XXgdFNR)
 ####  Reddit Example: https://www.reddit.com/user/postsalestoredditest
 ####  Tumblr Example: https://www.tumblr.com/blog/blogname40
 
