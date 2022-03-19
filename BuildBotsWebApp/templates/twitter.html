@@ -5,50 +5,51 @@
     <meta charset="UTF-8">
     <title>Title</title>
 </head>
-
-<script>
-
-    function toggle_display(){
-    el = document.querySelector('.ln');
-
-      if(el.style.visibility == 'hidden'){
-          el.style.visibility = 'visible'
-      }else{
-         el.style.visibility = 'hidden'
-      }
-    }
-
-</script>
-
 <body>
+ <div class="topnav">
+     <a href="{{ url_for('home') }}">Home</a>
+     <a class="active" href="{{ url_for('twitter.twitter') }}">Twitter</a>
+     <a href="{{ url_for('discord.discord') }}">Discord</a>
+ </div>
     <div id="container">
       <div id="content">
-        <form method="POST">
+        <form method="POST" enctype="multipart/form-data">
             {{ form.csrf_token }}
 
-            {{ form.your_name.label }}
-            <div class="yn">
-                Your name
-                {{ form.your_name }}
-            </div>
+            {{ form.need_traits.label }}
+            {{ form.need_traits }}
 
-            {% if error %}
-                <p style="color:red"> {{ error }} </p>
+            <br><br>
+            <input type="file" name="filename">
+            <br><br>
+            <input type="submit" value="Submit">
+            {% if invalid_file %}
+                <br><br>
+                <p style="color:red"> {{ invalid_file }} </p>
             {% endif %}
 
-            {{ form.last_name.label }}
-            <div class="ln">
-                Test
-                {{ form.last_name }}
-            </div>
-
-            <input type="submit" value="Submit">
-
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <h2> Parse Results: </h2>
+                {% for category, message in messages %}
+                  {% if category == 'normal' %}
+                    <p> {{ message }} </p>
+                  {% elif category == 'error' %}
+                    <ul>
+                        <li style="color:red"> {{ message }} </li>
+                    </ul>
+                  {% elif category == 'inner' %}
+                    <ul>
+                        <li style="color:green"> {{ message }} </li>
+                    </ul>
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
         </form>
-            <button onclick="toggle_display()">Toggle display</button>
       </div>
     </div>
-
+    <br><br><br><br><br>
     <div id="social">
         <a href="https://github.com/epicmanmoo/post-from-os">Github</a>
     </div>

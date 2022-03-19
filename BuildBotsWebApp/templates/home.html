@@ -6,33 +6,28 @@
     <title>OpenSea Bots</title>
 </head>
 <body>
-
+ <div class="topnav">
+     <a class="active" href="{{ url_for('home') }}">Home</a>
+     <a href="{{ url_for('twitter.twitter') }}">Twitter</a>
+     <a href="{{ url_for('discord.discord') }}">Discord</a>
+ </div>
     <div id="container">
       <div id="content">
         <div id="about">
           <h1>
           </h1>
-          <h3 style='clear:both' class="subhead">
+          <h3 class="subhead">
             Epicmanmoo's Opensea Bot Builder Website<span class="blinking">. . .</span>
           </h3>
-          <p id='pright'>
+          <p>
             Here, you will be able to create Opensea Sales bots and host them.
           </p>
-          <p>
-            To begin, click either of the two links below!
-          </p>
-            <hr style="width:100%;text-align:left;margin-left:0">
-          <ul>
-            <li><a href="{{ url_for('twitter') }}">Twitter Sales Bot Builder</a></li>
-              <br>
-            <li><a href="{{ url_for('discord') }}">Discord Sales Bot Builder</a></li>
-          </ul>
         </div>
       </div>
     </div>
 
     <div id="social">
-        <a href="https://github.com/epicmanmoo/post-from-os">Github</a>
+        <a href="https://github.com/epicmanmoo/post-from-os" target="_blank">Github</a>
     </div>
 
 </body>

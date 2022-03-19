@@ -6,10 +6,18 @@
     <title>Title</title>
 </head>
 <body>
+ <div class="topnav">
+     <a href="{{ url_for('home') }}">Home</a>
+     <a href="{{ url_for('twitter.twitter') }}">Twitter</a>
+     <a class="active" href="{{ url_for('discord.discord') }}">Discord</a>
+ </div>
     <div id="container">
       <div id="content">
 
       </div>
+    </div>
+    <div id="social">
+        <a href="https://github.com/epicmanmoo/post-from-os">Github</a>
     </div>
 </body>
 </html>
