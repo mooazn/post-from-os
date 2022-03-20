@@ -13,12 +13,12 @@ import twython.exceptions  # noqa: E402
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, rare_trait_list_, twitter_tags_,
-                 num_of_assets_, tx_hash_):
+    def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, rare_trait_list_, twitter_tags_,
+                 num_of_assets_, tx_hash_, symbol_):
         self.twitter_caption = None
         self.name = name_
         self.image_url = image_url_
-        self.eth_nft_price = eth_nft_price_
+        self.nft_price = nft_price_
         self.total_usd_cost = total_usd_cost_
         self.link = link_
         self.is_posted = False
@@ -26,6 +26,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.twitter_tags = twitter_tags_
         self.num_of_assets = num_of_assets_
         self.tx_hash = tx_hash_
+        self.symbol = symbol_
 
     def __eq__(self, other):
         return self.tx_hash == other.tx_hash
@@ -34,10 +35,11 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         return hash(('tx_hash', self.tx_hash))
 
     def create_twitter_caption(self):
-        self.twitter_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
+        self.twitter_caption = '{} bought for {} {} (${})\n'.format(self.name, self.nft_price, self.symbol,
+                                                                    self.total_usd_cost)
         if self.num_of_assets > 1:
-            self.twitter_caption = '{}\n{} assets bought for Ξ{} (${})\n'. \
-                format(self.name, self.num_of_assets, self.eth_nft_price, self.total_usd_cost)
+            self.twitter_caption = '{}\n{} assets bought for {} {} (${})\n'. \
+                format(self.name, self.num_of_assets, self.nft_price, self.symbol, self.total_usd_cost)
         remaining_characters = 280 - len(self.twitter_caption) - len(self.link) - len(self.twitter_tags)  # 280 is max
         # the remaining characters at this stage should roughly be 130-180 characters.
         if self.rare_trait_list:
@@ -137,14 +139,16 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 if base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
-                    eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                    decimals = int(base['payment_token']['decimals'])
+                    symbol = base['payment_token']['symbol']
+                    nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
                     usd_price = float(base['payment_token']['usd_price'])
-                    total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                    total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                     link = bundle['permalink']
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
-                    transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, [],
-                                                            self.twitter_tags, num_of_assets, tx_hash)
+                    transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, [],
+                                                            self.twitter_tags, num_of_assets, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -155,17 +159,19 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 continue
             try:
                 token_id = asset['token_id']
-                eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                decimals = int(base['payment_token']['decimals'])
+                symbol = base['payment_token']['symbol']
+                nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
                 usd_price = float(base['payment_token']['usd_price'])
-                total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                 link = asset['permalink']
             except (ValueError, TypeError):
                 continue
             rare_trait_list = []
             if self.trait_db is not None or self.trait_db is True:
                 rare_trait_list = self.create_rare_trait_list(token_id)
-            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                    rare_trait_list, self.twitter_tags, 1, tx_hash)
+            transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
+                                                    rare_trait_list, self.twitter_tags, 1, tx_hash, symbol)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -291,8 +297,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_usd_price = eth_price_base['ethusd']
                 usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                 input_type = tx_details_response_base['input']
+                symbol = 'ETH'
                 if input_type.startswith('0xab834bab'):  # this is an atomic match (check ether scan logs)
-                    if tx_eth_value == 0.0:  # check if ETH value of atomic match is 0.0 -> this means it's a bid
+                    if tx_eth_value == 0.0:  # check if ETH value of atomic match is 0.0
                         tx_hash_params = {
                             'module': 'proxy',
                             'action': 'eth_getTransactionReceipt',
@@ -304,6 +311,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         first_log = get_tx_receipt_request.json()['result']['logs'][0]
                         data = first_log['data']  # this is the price in WETH (because its a bid)
                         if data != '0x':
+                            symbol = 'WETH'
                             tx_eth_value = float(int(data, 16) / 1e18)
                             usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
                     name = '{} #{}'.format(self.ether_scan_name, token_id)
@@ -316,7 +324,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         asset_from_db = self.image_db.search(self.image_query.id == int(token_id))
                         image_url = asset_from_db[0]['image_url']
                     transaction = _OpenSeaTransactionObject(name, image_url, tx_eth_value, usd_nft_cost, asset_link,
-                                                            rare_trait_list, self.twitter_tags, 1, tx_hash)
+                                                            rare_trait_list, self.twitter_tags, 1, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
             return self.process_queue()

@@ -1,5 +1,5 @@
 import twython
-from flask import Blueprint, render_template, request, flash
+from flask import Blueprint, render_template, request, flash, redirect, session, url_for
 import requests
 from requests.structures import CaseInsensitiveDict
 from twython import Twython
@@ -10,26 +10,41 @@ from wtforms import Form, StringField
 twitter_blueprint = Blueprint('twitter', __name__, template_folder='templates')
 
 
-class TestForm(Form):
+class TraitForm(Form):
     need_traits = StringField('Print Traits?', [DataRequired()])
 
 
 @twitter_blueprint.route('/twitter', methods=['GET', 'POST'])
 def twitter():
-    form = TestForm(request.form)
+    try:
+        _ = session['_flashes']
+        return redirect(url_for('twitter.twitter'))
+    except KeyError:
+        pass
+    form = TraitForm(request.form)
     if request.method == 'POST' and form.validate():
         traits_needed = str(form.need_traits.data.strip())
         traits_needed = traits_needed.lower()
+        need_traits = False
         if traits_needed != 'y' and traits_needed != 'n' and traits_needed != 'true' and traits_needed != 'false' and\
                 traits_needed != 't' and traits_needed != 'f' and traits_needed != 'yes' and traits_needed != 'no':
             return render_template('twitter.html', form=form, invalid_file='Please enter a true/false or yes/no value.')
+        if traits_needed == 'y' or traits_needed == 'yes' or traits_needed == 'true' or traits_needed == 't':
+            need_traits = True
         file = request.files['filename']
         if file:
             if not secure_filename(file.filename).endswith('.txt'):
                 return render_template('twitter.html', form=form, invalid_file='Invalid file type. Only .txt is '
                                                                                'allowed.')
             else:
-                parse_file(file)
+                parsed = parse_file(file)
+                if not parsed:
+                    pass
+                else:
+                    session['random'] = 'value'
+                    session['need_traits'] = need_traits
+                    session['content'] = parsed[1]
+                    return redirect(url_for('shell.shell'))
         else:
             return render_template('twitter.html', form=form, invalid_file='Please provide a .txt file.')
     return render_template('twitter.html', form=form)
@@ -102,7 +117,6 @@ def parse_file(file):
     test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
     if test_os_response.status_code != 200:
         flash('Invalid OpenSea API key supplied.', 'error')
-        pass
     flash('OpenSea Key validated.', 'inner')
     flash('Evaluating Etherscan API Key', 'normal')
     test_ether_scan_values = file_content[7].strip().split()
@@ -115,3 +129,4 @@ def parse_file(file):
         return False
     flash('Ether Scan key validated.', 'inner')
     flash('Validation complete. No errors found.', 'normal')
+    return [True, file_content]

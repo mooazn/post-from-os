@@ -13,14 +13,14 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 class _OpenSeaTransactionObjectInstagram:
-    def __init__(self, name_, image_url_, seller_, buyer_, eth_nft_price_, usd_price_, total_usd_cost_,
-                 the_date_, the_time_, insta_tags_, tx_hash_):
+    def __init__(self, name_, image_url_, seller_, buyer_, nft_price_, usd_price_, total_usd_cost_,
+                 the_date_, the_time_, insta_tags_, tx_hash_, symbol_):
         self.insta_caption = None
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
         self.buyer = buyer_
-        self.eth_nft_price = eth_nft_price_
+        self.eth_nft_price = nft_price_
         self.usd_price = usd_price_
         self.total_usd_cost = total_usd_cost_
         self.the_date = the_date_
@@ -28,6 +28,7 @@ class _OpenSeaTransactionObjectInstagram:
         self.insta_tags = insta_tags_
         self.is_posted = False
         self.tx_hash = tx_hash_
+        self.symbol = symbol_
 
     def __eq__(self, other):
         return self.tx_hash == other.tx_hash
@@ -37,11 +38,11 @@ class _OpenSeaTransactionObjectInstagram:
 
     def create_insta_caption(self):
         self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
-                             'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} ETH and ' \
-                             'the price of ETH was ${}.\n\n{}'.format(self.name, self.the_date, self.the_time,
-                                                                      self.seller, self.buyer, self.total_usd_cost,
-                                                                      self.eth_nft_price, self.usd_price,
-                                                                      self.insta_tags)
+                             'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} {} and ' \
+                             'the price of {} was ${}.\n\n{}'.format(self.name, self.the_date, self.the_time,
+                                                                     self.seller, self.buyer, self.total_usd_cost,
+                                                                     self.eth_nft_price, self.symbol, self.symbol,
+                                                                     self.usd_price, self.insta_tags)
 
 
 class _PostFromOpenSeaInstagram:
@@ -117,9 +118,11 @@ class _PostFromOpenSeaInstagram:
             if tx_exists:
                 continue
             try:
-                eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                decimals = int(base['payment_token']['decimals'])
+                symbol = base['payment_token']['symbol']
+                nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
                 usd_price = float(base['payment_token']['usd_price'])
-                total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                 timestamp = str(base['transaction']['timestamp']).split('T')
                 date = datetime.datetime.strptime(timestamp[0], '%Y-%m-%d')
                 month = datetime.date(date.year, date.month, date.day).strftime('%B')
@@ -129,9 +132,9 @@ class _PostFromOpenSeaInstagram:
             day = str(date.day)
             the_date = month + ' ' + day + ', ' + year
             the_time = timestamp[1]
-            transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, eth_nft_price, usd_price,
+            transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, nft_price, usd_price,
                                                              total_usd_cost, the_date, the_time, self.insta_tags,
-                                                             tx_hash)
+                                                             tx_hash, symbol)
             transaction.create_insta_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()

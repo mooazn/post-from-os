@@ -8,16 +8,17 @@ from tinydb import TinyDB, Query
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    def __init__(self, name_, image_url_, eth_nft_price_, total_usd_cost_, link_, num_of_assets_, tx_hash_):
+    def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, num_of_assets_, tx_hash_, symbol_):
         self.tumblr_caption = None
         self.name = name_
         self.image_url = image_url_
-        self.eth_nft_price = eth_nft_price_
+        self.nft_price = nft_price_
         self.total_usd_cost = total_usd_cost_
         self.link = link_
         self.is_posted = False
         self.num_of_assets = num_of_assets_
         self.tx_hash = tx_hash_
+        self.symbol = symbol_
 
     def __eq__(self, other):
         return self.tx_hash == other.tx_hash
@@ -26,10 +27,11 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         return hash(('tx_hash', self.tx_hash))
 
     def create_tumblr_caption(self):
-        self.tumblr_caption = '{} bought for Ξ{} (${})\n'.format(self.name, self.eth_nft_price, self.total_usd_cost)
+        self.tumblr_caption = '{} bought for {} {} (${})\n'.format(self.name, self.nft_price, self.symbol,
+                                                                   self.total_usd_cost)
         if self.num_of_assets > 1:
-            self.tumblr_caption = '{}\n{} assets bought for Ξ{} (${})\n'.\
-                format(self.name, self.num_of_assets, self.eth_nft_price, self.total_usd_cost)
+            self.tumblr_caption = '{}\n{} assets bought for {} {} (${})\n'.\
+                format(self.name, self.num_of_assets, self.nft_price, self.symbol, self.total_usd_cost)
         self.tumblr_caption += '\n\n' + self.link + '\n\n'
 
 
@@ -99,14 +101,16 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
                 if base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
-                    eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                    decimals = int(base['payment_token']['decimals'])
+                    symbol = base['payment_token']['symbol']
+                    nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
                     usd_price = float(base['payment_token']['usd_price'])
-                    total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                    total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                     link = bundle['permalink']
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
-                    transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link,
-                                                            num_of_assets, tx_hash)
+                    transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
+                                                            num_of_assets, tx_hash, symbol)
                     transaction.create_tumblr_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -116,13 +120,16 @@ class _PostFromOpenSeaTumblr:  # class which holds all operations and utilizes b
             except TypeError:
                 continue
             try:
-                eth_nft_price = float('{0:.5f}'.format(int(base['total_price']) / 1e18))
+                decimals = int(base['payment_token']['decimals'])
+                symbol = base['payment_token']['symbol']
+                nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
                 usd_price = float(base['payment_token']['usd_price'])
-                total_usd_cost = '{:.2f}'.format(round(eth_nft_price * usd_price, 2))
+                total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                 link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            transaction = _OpenSeaTransactionObject(name, image_url, eth_nft_price, total_usd_cost, link, 1, tx_hash)
+            transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, 1, tx_hash,
+                                                    symbol)
             transaction.create_tumblr_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
