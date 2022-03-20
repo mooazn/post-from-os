@@ -117,6 +117,7 @@ def parse_file(file):
     test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
     if test_os_response.status_code != 200:
         flash('Invalid OpenSea API key supplied.', 'error')
+        return False
     flash('OpenSea Key validated.', 'inner')
     flash('Evaluating Etherscan API Key', 'normal')
     test_ether_scan_values = file_content[7].strip().split()
