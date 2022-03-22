@@ -114,6 +114,7 @@ class _PostFromOpenSeaTwitter:
                     continue
                 tx_hash = str(base['transaction']['transaction_hash'])
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                # TODO: might need to make a unique "key" be tx_hash + token_id for non-bundle transactions
                 if tx_exists:
                     continue
                 if base['asset_bundle'] is not None:
@@ -287,14 +288,20 @@ class _PostFromOpenSeaTwitter:
                         data = first_log['data']
                         if data != '0x':
                             address = first_log['address']
-                            token_info_req = requests.get(
-                                'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address), timeout=3)
-                            token_info_json = token_info_req.json()
-                            symbol = token_info_json['symbol']
-                            decimals = int(token_info_json['decimals'])
-                            price = round(token_info_json['price']['rate'], 3)
-                            tx_value = float(int(data, 16) / (1 * 10 ** decimals))
-                            usd_nft_cost = round(float(price) * tx_value, 2)
+                            if address == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':  # WETH is common, no API needed
+                                symbol = 'WETH'
+                                tx_eth_value = float(int(data, 16) / 1e18)
+                                usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+                            else:
+                                token_info_req = requests.get(
+                                    'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address),
+                                    timeout=3)
+                                token_info_json = token_info_req.json()
+                                symbol = token_info_json['symbol']
+                                decimals = int(token_info_json['decimals'])
+                                price = round(token_info_json['price']['rate'], 3)
+                                tx_value = float(int(data, 16) / (1 * 10 ** decimals))
+                                usd_nft_cost = round(float(price) * tx_value, 2)
                     name = '{} #{}'.format(self.collection_name_for_ether_scan, token_id)
                     asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
                     rare_trait_list = []
