@@ -275,7 +275,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     if tx_hash == next_tx_transfer_hash:
                         continue
                 from_address = tx_response_base['from']
-                if from_address == '0x0000000000000000000000000000000000000000':  # this is a mint, NOT a buy!!!
+                if from_address == '0x0000000000000000000000000000000000000000':
                     continue
                 tx_hash_params = {
                     'module': 'proxy',
@@ -285,8 +285,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 }
                 get_tx_hash_request = requests.get(self.ether_scan_api_url, params=tx_hash_params, timeout=3)
                 tx_details_response_base = get_tx_hash_request.json()['result']
-                tx_eth_hex_value = tx_details_response_base['value']
-                tx_eth_value = float(int(tx_eth_hex_value, 16) / 1e18)
+                tx_hex_value = tx_details_response_base['value']
+                tx_value = float(int(tx_hex_value, 16) / 1e18)
                 eth_price_params = {
                     'module': 'stats',
                     'action': 'ethprice',
@@ -295,11 +295,11 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
                 eth_price_base = eth_price_req.json()['result']
                 eth_usd_price = eth_price_base['ethusd']
-                usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+                usd_nft_cost = round(float(eth_usd_price) * tx_value, 2)
                 input_type = tx_details_response_base['input']
                 symbol = 'ETH'
-                if input_type.startswith('0xab834bab'):  # this is an atomic match (check ether scan logs)
-                    if tx_eth_value == 0.0:  # check if ETH value of atomic match is 0.0
+                if input_type.startswith('0xab834bab'):  # atomic match
+                    if tx_value == 0.0:
                         tx_hash_params = {
                             'module': 'proxy',
                             'action': 'eth_getTransactionReceipt',
@@ -309,11 +309,17 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         get_tx_receipt_request = requests.get(self.ether_scan_api_url, params=tx_hash_params,
                                                               timeout=3)
                         first_log = get_tx_receipt_request.json()['result']['logs'][0]
-                        data = first_log['data']  # this is the price in WETH (because its a bid)
+                        data = first_log['data']
+                        address = first_log['address']
+                        token_info_req = requests.get(
+                            'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address), timeout=3)
+                        token_info_json = token_info_req.json()
+                        symbol = token_info_json['symbol']
+                        decimals = int(token_info_json['decimals'])
+                        price = round(token_info_json['price']['rate'], 3)
                         if data != '0x':
-                            symbol = 'WETH'
-                            tx_eth_value = float(int(data, 16) / 1e18)
-                            usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+                            tx_value = float(int(data, 16) / (1 * 10 ** decimals))
+                            usd_nft_cost = round(float(price) * tx_value, 2)
                     name = '{} #{}'.format(self.ether_scan_name, token_id)
                     asset_link = 'https://opensea.io/assets/{}/{}'.format(self.contract_address, token_id)
                     rare_trait_list = []
@@ -323,7 +329,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     if self.image_db is not None:
                         asset_from_db = self.image_db.search(self.image_query.id == int(token_id))
                         image_url = asset_from_db[0]['image_url']
-                    transaction = _OpenSeaTransactionObject(name, image_url, tx_eth_value, usd_nft_cost, asset_link,
+                    transaction = _OpenSeaTransactionObject(name, image_url, tx_value, usd_nft_cost, asset_link,
                                                             rare_trait_list, self.twitter_tags, 1, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
