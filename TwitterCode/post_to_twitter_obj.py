@@ -310,14 +310,14 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                                                               timeout=3)
                         first_log = get_tx_receipt_request.json()['result']['logs'][0]
                         data = first_log['data']
-                        address = first_log['address']
-                        token_info_req = requests.get(
-                            'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address), timeout=3)
-                        token_info_json = token_info_req.json()
-                        symbol = token_info_json['symbol']
-                        decimals = int(token_info_json['decimals'])
-                        price = round(token_info_json['price']['rate'], 3)
                         if data != '0x':
+                            address = first_log['address']
+                            token_info_req = requests.get(
+                                'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address), timeout=3)
+                            token_info_json = token_info_req.json()
+                            symbol = token_info_json['symbol']
+                            decimals = int(token_info_json['decimals'])
+                            price = round(token_info_json['price']['rate'], 3)
                             tx_value = float(int(data, 16) / (1 * 10 ** decimals))
                             usd_nft_cost = round(float(price) * tx_value, 2)
                     name = '{} #{}'.format(self.ether_scan_name, token_id)
