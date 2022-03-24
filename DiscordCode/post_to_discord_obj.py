@@ -119,10 +119,11 @@ class _PostFromOpenSeaDiscord:
                 if self.tx_type == EventType.SALE.value and base['asset_bundle'] is not None:
                     bundle = base['asset_bundle']
                     tx_hash = str(base['transaction']['transaction_hash'])
-                    tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                    key = tx_hash
+                    tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                     if tx_exists:
                         continue
-                    self.tx_db.insert({'tx': tx_hash})
+                    self.tx_db.insert({'tx': key})
                     image_url = bundle['asset_contract']['collection']['featured_image_url']
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
@@ -181,11 +182,13 @@ class _PostFromOpenSeaDiscord:
                 buyer = buyer_address[0:8]
             transaction = None
             if self.tx_type == EventType.SALE.value:
+                token_id = asset['token_id']
                 tx_hash = str(base['transaction']['transaction_hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                key = tx_hash + ' ' + token_id
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
                     continue
-                self.tx_db.insert({'tx': tx_hash})
+                self.tx_db.insert({'tx': key})
                 if seller_address == buyer_address or seller == buyer:
                     continue
                 try:
@@ -217,6 +220,8 @@ class _PostFromOpenSeaDiscord:
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, total_usd_cost, link,
                                                         self.tx_type, image_thumbnail_url, self.embed_icon_url,
                                                         self.embed_rgb_color, seller_link, buyer_link, 1)
+            # elif ...:
+            #     pass
             transaction.create_discord_embed()
             self.tx_queue.append(transaction)
         return self.process_queue()
