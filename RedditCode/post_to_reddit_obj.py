@@ -9,7 +9,7 @@ from tinydb import TinyDB, Query
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
-    def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, num_of_assets_, tx_hash_, symbol_):
+    def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, num_of_assets_, key_, symbol_):
         self.reddit_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -18,14 +18,14 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.link = link_
         self.is_posted = False
         self.num_of_assets = num_of_assets_
-        self.tx_hash = tx_hash_
+        self.key = key_
         self.symbol = symbol_
 
     def __eq__(self, other):
-        return self.tx_hash == other.tx_hash
+        return self.key == other.key
 
     def __hash__(self):
-        return hash(('tx_hash', self.tx_hash))
+        return hash(('key', self.key))
 
     def create_reddit_caption(self):
         self.reddit_caption = '{} bought for {} {} (${})\n\n'.format(self.name, self.nft_price, self.symbol,
@@ -96,10 +96,11 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                 except IndexError:
                     continue
                 tx_hash = str(base['transaction']['transaction_hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-                if tx_exists:
-                    continue
+                key = tx_hash
                 if base['asset_bundle'] is not None:
+                    tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+                    if tx_exists:
+                        continue
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
                     decimals = int(base['payment_token']['decimals'])
@@ -111,7 +112,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
                     transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
-                                                            num_of_assets, tx_hash, symbol)
+                                                            num_of_assets, key, symbol)
                     transaction.create_reddit_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -121,6 +122,11 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
             except TypeError:
                 continue
             try:
+                token_id = asset['token_id']
+                key = tx_hash + ' ' + token_id
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+                if tx_exists:
+                    continue
                 decimals = int(base['payment_token']['decimals'])
                 symbol = base['payment_token']['symbol']
                 nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
@@ -129,7 +135,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                 link = asset['permalink']
             except (ValueError, TypeError):
                 continue
-            transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, 1, tx_hash,
+            transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, 1, key,
                                                     symbol)
             transaction.create_reddit_caption()
             self.tx_queue.append(transaction)
@@ -144,7 +150,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
         self.tx_queue = list(set(self.tx_queue))
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.tx_hash))) == 0 else True
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.key))) == 0 else True
             if cur_os_obj.is_posted or tx_exists:
                 self.tx_queue.pop(index)
             else:
@@ -171,7 +177,7 @@ class _PostFromOpenSeaReddit:  # class which holds all operations and utilizes b
                                                                                         image_path=self.file_name).id
             self.reddit.submission(id=sub_id).reply(self.os_obj_to_post.reddit_caption)
             self.os_obj_to_post.is_posted = True
-            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+            self.tx_db.insert({'tx': self.os_obj_to_post.key})
             return True
         except Exception as e:
             print(e, flush=True)

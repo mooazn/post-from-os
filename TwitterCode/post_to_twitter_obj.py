@@ -529,6 +529,22 @@ class ManageFlowObj:  # Main class which does all of the operations
                     print('Downloading image error at roughly', date_time_now, flush=True)
                     time.sleep(10)
             else:
+                # TODO: Time between pinging API (kept this off the shelf for too long):
+                #   Find a way to increase the time to sleep based on how many transactions have been occurring
+                #   More posts happening? keep checking every few seconds or decrease if time awaited is higher
+                #   Less posts happening? space out the time we send each request.
+                #   First thought:
+                #       use one whole day to get the average number of posts per hour
+                #       i.e. 2, 1, 6, 4, 1, 1, 5, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 2, 2, 3, 1, 0, 0, 1 - avg: 1.75 ~= 2
+                #       roughly 2 posts per hour based on the above data set (total 33 posts in the first day)
+                #       keep track of the posts per day for the next day
+                #       for each hour after the first day, check how many posts have occurred.
+                #           diff = posts_this_hour - avg
+                #           if diff higher than avg:
+                #               decrease time by (diff * (avg / 30)) seconds
+                #           else:
+                #               increase time by ((avg - posts_this_hour) * (((avg / 5) / posts_this_hour)) + 1) seconds
+                #       update avg based on the posts today
                 print('No new post at roughly', date_time_now, flush=True)
                 time.sleep(5)
 

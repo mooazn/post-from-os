@@ -14,7 +14,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 class _OpenSeaTransactionObjectInstagram:
     def __init__(self, name_, image_url_, seller_, buyer_, nft_price_, usd_price_, total_usd_cost_,
-                 the_date_, the_time_, insta_tags_, tx_hash_, symbol_):
+                 the_date_, the_time_, insta_tags_, key_, symbol_):
         self.insta_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -27,14 +27,14 @@ class _OpenSeaTransactionObjectInstagram:
         self.the_time = the_time_
         self.insta_tags = insta_tags_
         self.is_posted = False
-        self.tx_hash = tx_hash_
+        self.key = key_
         self.symbol = symbol_
 
     def __eq__(self, other):
-        return self.tx_hash == other.tx_hash
+        return self.key == other.key
 
     def __hash__(self):
-        return hash(('tx_hash', self.tx_hash))
+        return hash(('tx_hash', self.key))
 
     def create_insta_caption(self):
         self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
@@ -92,6 +92,12 @@ class _PostFromOpenSeaInstagram:
         for i in range(0, self.limit):
             base = self.response.json()['asset_events'][i]
             asset = base['asset']
+            tx_hash = str(base['transaction']['transaction_hash'])
+            token_id = asset['token_id']
+            key = tx_hash + ' ' + token_id
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+            if tx_exists:
+                continue
             try:
                 name = str(asset['name'])
             except TypeError:
@@ -113,10 +119,6 @@ class _PostFromOpenSeaInstagram:
                 buyer = buyer_address[0:8]
             if seller_address == buyer_address or seller == buyer:
                 continue
-            tx_hash = str(base['transaction']['transaction_hash'])
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-            if tx_exists:
-                continue
             try:
                 decimals = int(base['payment_token']['decimals'])
                 symbol = base['payment_token']['symbol']
@@ -134,7 +136,7 @@ class _PostFromOpenSeaInstagram:
             the_time = timestamp[1]
             transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, nft_price, usd_price,
                                                              total_usd_cost, the_date, the_time, self.insta_tags,
-                                                             tx_hash, symbol)
+                                                             key, symbol)
             transaction.create_insta_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -148,7 +150,7 @@ class _PostFromOpenSeaInstagram:
         self.tx_queue = list(set(self.tx_queue))
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.tx_hash))) == 0 else True
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.key))) == 0 else True
             if cur_os_obj.is_posted or tx_exists:
                 self.tx_queue.pop(index)
             else:
@@ -220,7 +222,7 @@ class _PostFromOpenSeaInstagram:
                 }
                 requests.post(publish_url, data=publish, timeout=10)
                 self.os_obj_to_post.is_posted = True
-                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+                self.tx_db.insert({'tx': self.os_obj_to_post.key})
                 self.daily_posts += 1
                 return True
             else:
@@ -369,7 +371,7 @@ class ManageFlowObj:
         while True:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
-            if int(time.time()) - self.begin_time >= 3600 * 24 * 55:
+            if int(time.time()) - self.begin_time >= 3600 * 24 * 45:
                 self.gen_long_lived_token_class.send_email_to_manually_change_user_token()
             # time_now = int(time.time())
             # time_elapsed_since_token_generated = None
