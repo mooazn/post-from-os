@@ -10,7 +10,7 @@ from twython import Twython
 
 class _OpenSeaTransactionObject:
     def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, rare_trait_list_,
-                 twitter_tags_, num_of_assets_, key_, symbol_):
+                 twitter_tags_, num_of_assets_, key_, tx_hash_, symbol_):
         self.twitter_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -22,6 +22,7 @@ class _OpenSeaTransactionObject:
         self.twitter_tags = twitter_tags_
         self.num_of_assets = num_of_assets_
         self.key = key_
+        self.tx_hash = tx_hash_
         self.symbol = symbol_
 
     def __eq__(self, other):
@@ -129,7 +130,7 @@ class _PostFromOpenSeaTwitter:
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
                     transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, [],
-                                                            self.twitter_tags, num_of_assets, key, symbol)
+                                                            self.twitter_tags, num_of_assets, key, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -156,7 +157,7 @@ class _PostFromOpenSeaTwitter:
             if self.collection_needs_traits:
                 rare_trait_list = self.create_rare_trait_list(token_id)
             transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
-                                                    rare_trait_list, self.twitter_tags, 1, key, symbol)
+                                                    rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -239,6 +240,9 @@ class _PostFromOpenSeaTwitter:
                 tx_response_base = tx_response['result'][i]
                 token_id = tx_response_base['tokenID']
                 tx_hash = str(tx_response_base['hash'])
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                if tx_exists:
+                    continue
                 key = tx_hash + ' ' + token_id
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
@@ -315,7 +319,7 @@ class _PostFromOpenSeaTwitter:
                     if self.collection_needs_traits:
                         rare_trait_list = self.create_rare_trait_list(token_id)
                     transaction = _OpenSeaTransactionObject(name, None, tx_value, usd_nft_cost, asset_link,
-                                                            rare_trait_list, self.twitter_tags, 1, key, symbol)
+                                                            rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
             return self.process_queue()
@@ -329,6 +333,7 @@ class _PostFromOpenSeaTwitter:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
                 self.tx_db.insert({'tx': self.os_obj_to_post.key})
+                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
                 self.os_obj_to_post.is_posted = True
                 return True
             response = self.twitter.upload_media(media=image)
@@ -337,6 +342,7 @@ class _PostFromOpenSeaTwitter:
             self.twitter.update_status(status=self.os_obj_to_post.twitter_caption, media_ids=media_id)
             self.os_obj_to_post.is_posted = True
             self.tx_db.insert({'tx': self.os_obj_to_post.key})
+            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
             return True
         except Exception as e:
             image.close()
