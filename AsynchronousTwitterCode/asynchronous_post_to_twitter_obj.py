@@ -10,7 +10,7 @@ from twython import Twython
 
 class _OpenSeaTransactionObject:
     def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, rare_trait_list_,
-                 twitter_tags_, num_of_assets_, tx_hash_, symbol_):
+                 twitter_tags_, num_of_assets_, key_, symbol_):
         self.twitter_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -21,14 +21,14 @@ class _OpenSeaTransactionObject:
         self.rare_trait_list = rare_trait_list_
         self.twitter_tags = twitter_tags_
         self.num_of_assets = num_of_assets_
-        self.tx_hash = tx_hash_
+        self.key = key_
         self.symbol = symbol_
 
     def __eq__(self, other):
-        return self.tx_hash == other.tx_hash
+        return self.key == other.key
 
     def __hash__(self):
-        return hash(('tx_hash', self.tx_hash))
+        return hash(('key', self.key))
 
     def create_twitter_caption(self):
         self.twitter_caption = '{} bought for {} {} (${})\n'.format(self.name, self.nft_price, self.symbol,
@@ -113,11 +113,11 @@ class _PostFromOpenSeaTwitter:
                 except IndexError:
                     continue
                 tx_hash = str(base['transaction']['transaction_hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
-                # TODO: might need to make a unique "key" be tx_hash + token_id for non-bundle transactions
-                if tx_exists:
-                    continue
+                key = tx_hash
                 if base['asset_bundle'] is not None:
+                    tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+                    if tx_exists:
+                        continue
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['collection']['large_image_url']
                     decimals = int(base['payment_token']['decimals'])
@@ -129,7 +129,7 @@ class _PostFromOpenSeaTwitter:
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
                     transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, [],
-                                                            self.twitter_tags, num_of_assets, tx_hash, symbol)
+                                                            self.twitter_tags, num_of_assets, key, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
                     continue
@@ -140,6 +140,10 @@ class _PostFromOpenSeaTwitter:
                 continue
             try:
                 token_id = asset['token_id']
+                key = tx_hash + ' ' + token_id
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+                if tx_exists:
+                    continue
                 decimals = int(base['payment_token']['decimals'])
                 symbol = base['payment_token']['symbol']
                 nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
@@ -152,7 +156,7 @@ class _PostFromOpenSeaTwitter:
             if self.collection_needs_traits:
                 rare_trait_list = self.create_rare_trait_list(token_id)
             transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
-                                                    rare_trait_list, self.twitter_tags, 1, tx_hash, symbol)
+                                                    rare_trait_list, self.twitter_tags, 1, key, symbol)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -166,7 +170,7 @@ class _PostFromOpenSeaTwitter:
         self.tx_queue = list(set(self.tx_queue))
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
-            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.tx_hash))) == 0 else True
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.key))) == 0 else True
             if cur_os_obj.is_posted or tx_exists:
                 self.tx_queue.pop(index)
             else:
@@ -235,12 +239,14 @@ class _PostFromOpenSeaTwitter:
                 tx_response_base = tx_response['result'][i]
                 token_id = tx_response_base['tokenID']
                 tx_hash = str(tx_response_base['hash'])
-                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == tx_hash)) == 0 else True
+                key = tx_hash + ' ' + token_id
+                tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
                     continue
                 if i + 1 != self.ether_scan_limit:  # check if next tx has is same as this one's
                     next_tx_hash = str(tx_response['result'][i + 1]['hash'])
-                    if tx_hash == next_tx_hash:
+                    next_key = next_tx_hash + ' ' + token_id
+                    if key == next_key:
                         continue
                 else:  # if we are at the end of the list: fetch the api again, increase offset by 1, and check if same
                     tx_transfer_params['offset'] += 1
@@ -248,7 +254,8 @@ class _PostFromOpenSeaTwitter:
                                                                timeout=1.5)
                     new_tx_response = get_new_tx_transfer_request.json()
                     next_tx_transfer_hash = str(new_tx_response['result'][i + 1]['hash'])
-                    if tx_hash == next_tx_transfer_hash:
+                    next_key = next_tx_transfer_hash + ' ' + token_id
+                    if key == next_key:
                         continue
                 from_address = tx_response_base['from']
                 if from_address == '0x0000000000000000000000000000000000000000':
@@ -290,8 +297,8 @@ class _PostFromOpenSeaTwitter:
                             address = first_log['address']
                             if address == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':  # WETH is common, no API needed
                                 symbol = 'WETH'
-                                tx_eth_value = float(int(data, 16) / 1e18)
-                                usd_nft_cost = round(float(eth_usd_price) * tx_eth_value, 2)
+                                tx_value = float(int(data, 16) / 1e18)
+                                usd_nft_cost = round(float(eth_usd_price) * tx_value, 2)
                             else:
                                 token_info_req = requests.get(
                                     'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address),
@@ -308,7 +315,7 @@ class _PostFromOpenSeaTwitter:
                     if self.collection_needs_traits:
                         rare_trait_list = self.create_rare_trait_list(token_id)
                     transaction = _OpenSeaTransactionObject(name, None, tx_value, usd_nft_cost, asset_link,
-                                                            rare_trait_list, self.twitter_tags, 1, tx_hash, symbol)
+                                                            rare_trait_list, self.twitter_tags, 1, key, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
             return self.process_queue()
@@ -321,7 +328,7 @@ class _PostFromOpenSeaTwitter:
         try:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
-                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+                self.tx_db.insert({'tx': self.os_obj_to_post.key})
                 self.os_obj_to_post.is_posted = True
                 return True
             response = self.twitter.upload_media(media=image)
@@ -329,7 +336,7 @@ class _PostFromOpenSeaTwitter:
             media_id = [response['media_id']]
             self.twitter.update_status(status=self.os_obj_to_post.twitter_caption, media_ids=media_id)
             self.os_obj_to_post.is_posted = True
-            self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+            self.tx_db.insert({'tx': self.os_obj_to_post.key})
             return True
         except Exception as e:
             image.close()
