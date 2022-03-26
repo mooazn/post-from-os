@@ -1,5 +1,7 @@
 # Post Events From Opensea
 
+### https://pypi.org/project/post-from-os/1.0/
+
 ### NOTE: The below accounts are ones that I have my code geared towards and have hosted on my VPS. I will continue to create and fix bots for various social media platforms even if I do not use them.
 
 ####  Discord Example: https://ibb.co/XXgdFNR
