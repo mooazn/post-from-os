@@ -1,3 +1,4 @@
+import importlib
 import math
 import requests
 from requests.structures import CaseInsensitiveDict
@@ -5,9 +6,8 @@ from twython import Twython
 import twython.exceptions
 
 
-def generate_asynchronous_code(values_map):
-    create_async_code_file = open('asynchronous_twitter_code.py', 'w')  # replace this line with the async file you
-    # want it to be called
+def generate_asynchronous_code(values_map, file_name):
+    create_async_code_file = open(file_name, 'w')
     create_async_code_file.write('''import asyncio\nfrom asynchronous_post_to_twitter_obj import ManageFlowObj\n\n\n''')
     boiler_plate_code = '''    
     while True:
@@ -60,9 +60,10 @@ def generate_asynchronous_code(values_map):
 
 
 class ManageMultipleTwitterPosts:
-    def __init__(self, twitter_values_file_multiple, *args):
-        self.args = *args,
+    def __init__(self, twitter_values_file_multiple, file_name: str, *args):
         self.twitter_values_file = twitter_values_file_multiple
+        self.file_name = file_name
+        self.args = *args,
         self.hashtags = []
         self.collection_names = []
         self.collection_stats = []
@@ -73,10 +74,10 @@ class ManageMultipleTwitterPosts:
         self.validate_params()
         self.values_map = {}
         self.create_map()
-        generate_asynchronous_code(self.values_map)
+        generate_asynchronous_code(self.values_map, self.file_name)
         print('Beginning program...')
-        import asynchronous_twitter_code  # replace this line with the async file you want it to be called
-        asynchronous_twitter_code.run(self.values_map)
+        async_code = importlib.import_module(self.file_name[:-3])
+        async_code.run(self.values_map)
 
     def validate_params(self):
         print('Beginning validation of Twitter Values File...')
@@ -91,6 +92,11 @@ class ManageMultipleTwitterPosts:
         if '|' not in hashtags_test:
             values_file_test.close()
             raise Exception('Hashtags for other collections should be separated by \"|\"')
+        if not self.file_name.endswith('.py'):
+            raise Exception('Invalid asynchronous code file name. Must be a .py file.')
+        if self.file_name == 'asynchronous_twitter_code.py':
+            raise Exception('Asynchronous code file name must be something other than the default.')
+        print('Asynchronous Code File .py validated...')
         hashtag_collections = hashtags_test.split('|')
         collection_count = len(hashtag_collections)
         if len(self.args) != collection_count:

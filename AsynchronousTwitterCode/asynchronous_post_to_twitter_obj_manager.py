@@ -1,6 +1,6 @@
 from asynchronous_post_to_twitter_manager import ManageMultipleTwitterPosts
 
-MMTP = ManageMultipleTwitterPosts('Asynchronous Twitter Values .txt', False, False)
+MMTP = ManageMultipleTwitterPosts('Asynchronous Twitter Values .txt', 'Asynchronous Code File .py', False, False)
 
 # The Asynchronous Twitter Values file (txt) must be like shown below (More info for keys can be found on the Twitter
 # documentation. you must apply and create an app. https://developer.twitter.com/en):
@@ -29,6 +29,9 @@ MMTP = ManageMultipleTwitterPosts('Asynchronous Twitter Values .txt', False, Fal
 # Etherscan API key (additional Etherscan API keys can be added as well, separated with '|')
 # NFT | NFT-2 | NFT-3
 
+# Following the file, there is a necessary argument which is the name of the asynchronous code file that will be
+# generated when the program is ran. This is a .py file which executes all the code and keeps the program running.
+
 # The next provided string arguments are True/False values. they should match the number of collections you provided.
 # For example, if you provide one collection, you must provide a single True/False value. If you provided 3 collections,
 # you must provide 3 True/False value. Etc. These True/False values determine whether or not traits will be printed for
@@ -38,11 +41,12 @@ MMTP = ManageMultipleTwitterPosts('Asynchronous Twitter Values .txt', False, Fal
 # True, False, True
 
 # example instantiators:
-mfo = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', False, False)  # will not print traits for
-# either collection
+mfo = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', 'asynchronous_twitter_code_yachts.py',
+                                 False, False)  # will not print traits for # either collection
 
-mfo2 = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', True, True)  # will print traits for both
-# collections
+mfo2 = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', 'asynchronous_twitter_code_yachts.py',
+                                  True, True)  # will print traits for both# collections
 
-mfo3 = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', False, True)  # will print traits for only
-# the 2nd collection that is provided. traits for first collection will not print
+mfo3 = ManageMultipleTwitterPosts('asynchronous_twitter_values_yachts.txt', 'asynchronous_twitter_code_yachts.py',
+                                  False, True)  # will print traits for only the 2nd collection that is provided.
+# traits for first collection will not print

@@ -2,8 +2,6 @@ AsynchronousTwitterCode/asynchronous_post_yachts_twitter.py
 AsynchronousTwitterCode/asynchronous_twitter_values_yachts.txt
 AsynchronousTwitterCode/asynchronous_post_humanoids_twitter.py
 AsynchronousTwitterCode/asynchronous_twitter_values_humanoids.txt
-AsynchronousTwitterCode/asynchronous_post_to_twitter_manager_humanoids.py
-AsynchronousTwitterCode/asynchronous_post_to_twitter_manager_yachts.py
 AsynchronousTwitterCode/asynchronous_twitter_code_humanoids.py
 AsynchronousTwitterCode/asynchronous_twitter_code_yachts.py
 
@@ -11,7 +9,6 @@ DiscordCode/discord_values_yachts.txt
 DiscordCode/discord_values_yachts_real.txt
 DiscordCode/post_yachts_discord.py
 DiscordCode/asynchronous_discord_code_yachts.py
-DiscordCode/post_to_discord_manager_yachts.py
 
 HelperCode/banana_trait_db.json
 HelperCode/generator_values_for_tmux_file.txt

@@ -1,6 +1,7 @@
 import asyncio
 import difflib
 import discord
+import importlib
 import post_to_discord_obj
 import requests
 from requests.structures import CaseInsensitiveDict
@@ -19,12 +20,13 @@ GAS_CACHE = []
 
 
 class ManageManager:
-    def __init__(self, discord_values_file):
+    def __init__(self, discord_values_file, file_name: str):
         global VALUES, CONTRACT_ADDRESSES
         self.discord_values = discord_values_file
         self.contract_addresses = CONTRACT_ADDRESSES
         self.has_listings = []
         self.values = VALUES
+        self.file_name = file_name
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
@@ -35,6 +37,11 @@ class ManageManager:
         with open(self.discord_values) as dv:
             if len(dv.readlines()) != 9:
                 raise Exception('The Discord Values file must be formatted correctly.')
+        if not self.file_name.endswith('.py'):
+            raise Exception('Invalid asynchronous code file name. Must be a .py file.')
+        if self.file_name == 'asynchronous_discord_code.py':
+            raise Exception('Asynchronous code file name must be something other than the default.')
+        print('Asynchronous Code File .py validated...')
         test_discord_values = open(self.discord_values, 'r')
         discord_token = test_discord_values.readline().strip()
         collection_names_test = test_discord_values.readline().split('|')
@@ -215,13 +222,13 @@ class ManageManager:
         test_discord_values.close()
         print('Validation of Discord Values .txt complete. No errors found...')
         print('Validation complete...')
-        self.generate_asynchronous_code()
+        self.generate_asynchronous_code(self.file_name)
         print('Successfully generated asynchronous code...')
         values_listing = []
         for ca, v in self.values.items():
             values_listing.append([[v[0], ca, v[2], v[3], v[4]], v[1]])
-        import asynchronous_discord_code  # replace this line with the async file you want it to be called
-        asynchronous_discord_code.run(CLIENT, values_listing)
+        async_code = importlib.import_module(self.file_name[:-3])
+        async_code.run(CLIENT, values_listing)
         CLIENT.loop.create_task(update_gas_presence())
         try:
             print('Beginning program...')
@@ -229,7 +236,7 @@ class ManageManager:
         except discord.errors.LoginFailure:
             raise Exception('Invalid Discord token supplied.')
 
-    def generate_asynchronous_code(self):
+    def generate_asynchronous_code(self, file_name):
         index = 0
         space = ' ' * 4
         sales_boiler_plate_code = '''
@@ -268,8 +275,7 @@ class ManageManager:
         else:
             await asyncio.sleep(10)
             '''
-        code_file = open('asynchronous_discord_code.py', 'w')  # replace this line with the async file you want it to
-        # be called
+        code_file = open(file_name, 'w')
         code_file.write(
             '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
             \n\n''')
