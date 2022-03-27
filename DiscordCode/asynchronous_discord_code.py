@@ -1,7 +1,9 @@
 import asyncio
 import post_to_discord_obj
 from post_to_discord_obj import EventType, ManageFlowObj
-            
+
+# THIS IS AN EXAMPLE OF A GENERATED FILE
+
 
 async def process_sales_0(client, sales_obj, sales_channel):
     await client.wait_until_ready()

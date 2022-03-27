@@ -1,9 +1,12 @@
-import importlib
-import math
-import requests
-from requests.structures import CaseInsensitiveDict
-from twython import Twython
-import twython.exceptions
+import sys
+sys.path.append('../')
+from HelperCode import find_file  # noqa: E402
+import importlib  # noqa: E402
+import math  # noqa: E402
+import requests  # noqa: E402
+from requests.structures import CaseInsensitiveDict  # noqa: E402
+from twython import Twython  # noqa: E402
+import twython.exceptions  # noqa: E402
 
 
 def generate_asynchronous_code(values_map, file_name):
@@ -21,6 +24,10 @@ def generate_asynchronous_code(values_map, file_name):
                 await asyncio.sleep(5)
                 continue
             else:
+                download_image = obj.try_to_download_image()
+                if not download_image:
+                    await asyncio.sleep(5)
+                    continue
                 res = obj.try_to_post_to_twitter()
                 if res:
                     await asyncio.sleep(5)
@@ -100,8 +107,28 @@ class ManageMultipleTwitterPosts:
         hashtag_collections = hashtags_test.split('|')
         collection_count = len(hashtag_collections)
         if len(self.args) != collection_count:
-            raise Exception('The number of args is not the same as the number of hashtags.')
-        print('Args validated...')
+            raise Exception('The number of args is not the same as the number of collections.')
+        count = 1
+        for arg in self.args:
+            if type(arg) is list:
+                if len(arg) != 2:
+                    raise Exception('List must have 2 values.')
+                if type(arg[0]) is not bool:
+                    raise Exception('First argument in list must be a boolean.')
+                elif type(arg[1]) is not str:
+                    raise Exception('Second argument in list must be a string.')
+                if not str(arg[1]).endswith('.json'):
+                    raise Exception('Image DB must end with a .json file extension.')
+                image_file = find_file.find(arg[1])
+                if image_file is None:
+                    raise Exception('Image DB .json not found. Either type the name correctly or remove the parameter.')
+                # self.args[count][1] = image_file
+                self.args[count - 1][1] = image_file
+            else:
+                if type(arg) is not bool:
+                    raise Exception('Extra arguments must only be a list or boolean.')
+            print(f'Args validated for collection {count}')
+            count += 1
         count = 1
         for hashtag_collection in hashtag_collections:
             cur_hashtags = []

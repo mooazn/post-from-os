@@ -63,6 +63,12 @@ class _PostFromOpenSeaTwitter:
         self.ether_scan_api_key = values[5]
         self.collection_name_for_ether_scan = values[6]
         self.collection_needs_traits = values[7]
+        self.args = values[7]
+        self.image_db = None
+        if type(self.args) is list:
+            self.collection_needs_traits = self.args[0]
+            self.image_db = TinyDB(self.args[1])
+            self.image_query = Query()
         self.file_name = self.collection_name + '_twitter_asynchronous.jpeg'
         self.total_supply = self.collection_stats[0]
         self.contract_address = self.collection_stats[1]
@@ -318,7 +324,11 @@ class _PostFromOpenSeaTwitter:
                     rare_trait_list = []
                     if self.collection_needs_traits:
                         rare_trait_list = self.create_rare_trait_list(token_id)
-                    transaction = _OpenSeaTransactionObject(name, None, tx_value, usd_nft_cost, asset_link,
+                    image_url = None
+                    if self.image_db is not None:
+                        asset_from_db = self.image_db.search(self.image_query.id == int(token_id))
+                        image_url = asset_from_db[0]['image_url']
+                    transaction = _OpenSeaTransactionObject(name, image_url, tx_value, usd_nft_cost, asset_link,
                                                             rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
@@ -328,7 +338,6 @@ class _PostFromOpenSeaTwitter:
             return -1
 
     def post_to_twitter(self):
-        image = open(self.file_name, 'rb')
         try:
             if self.os_obj_to_post.image_url is None:
                 self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
@@ -336,6 +345,11 @@ class _PostFromOpenSeaTwitter:
                 self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
                 self.os_obj_to_post.is_posted = True
                 return True
+        except Exception as e:
+            print(e, flush=True)
+            return False
+        image = open(self.file_name, 'rb')
+        try:
             response = self.twitter.upload_media(media=image)
             image.close()
             media_id = [response['media_id']]

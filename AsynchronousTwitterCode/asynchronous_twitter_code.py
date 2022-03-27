@@ -1,6 +1,8 @@
 import asyncio
 from asynchronous_post_to_twitter_obj import ManageFlowObj
 
+# THIS IS AN EXAMPLE OF A GENERATED FILE
+
 
 async def collection_1(obj):        
     while True:
@@ -14,6 +16,10 @@ async def collection_1(obj):
                 await asyncio.sleep(5)
                 continue
             else:
+                download_image = obj.try_to_download_image()
+                if not download_image:
+                    await asyncio.sleep(5)
+                    continue
                 res = obj.try_to_post_to_twitter()
                 if res:
                     await asyncio.sleep(5)
@@ -47,6 +53,10 @@ async def collection_2(obj):
                 await asyncio.sleep(5)
                 continue
             else:
+                download_image = obj.try_to_download_image()
+                if not download_image:
+                    await asyncio.sleep(5)
+                    continue
                 res = obj.try_to_post_to_twitter()
                 if res:
                     await asyncio.sleep(5)
