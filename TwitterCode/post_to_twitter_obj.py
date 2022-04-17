@@ -81,6 +81,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.os_events_url = 'https://api.opensea.io/api/v1/events/'
         self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
         self.ether_scan_api_url = 'https://api.etherscan.io/api'
+        self.looks_rare_api_url = 'https://api.looksrare.org/api/v1/events?type=SALE'
         self.response = None
         self.os_obj_to_post = None
         self.tx_db = TinyDB(self.collection_name + '_tx_hash_twitter_db.json')
@@ -246,8 +247,51 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             print(e, flush=True)
             return
 
+    def process_via_looks_rare(self):
+        self.looks_rare_api_url += f'&collection={self.contract_address}'
+        looks_rare_request = requests.get(self.looks_rare_api_url)
+        looks_rare_response = looks_rare_request.json()
+        eth_price_params = {
+            'module': 'stats',
+            'action': 'ethprice',
+            'apikey': self.ether_scan_api_key
+        }
+        eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
+        eth_price_base = eth_price_req.json()['result']
+        eth_usd_price = eth_price_base['ethusd']
+        for i in looks_rare_response['data']:
+            tx_hash = i['hash']
+            order = i['order']
+            token_id = order['tokenId']
+            # db stuff...
+            nft_other_currency_price = order['price']
+            currency_address = order['currencyAddress']
+            if str(currency_address).lower() == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':
+                symbol = 'WETH'
+                price = int(nft_other_currency_price) / 1e18
+                usd_nft_cost = round(float(eth_usd_price) * price, 2)
+                print(symbol, price, '$', usd_nft_cost)
+            else:
+                token_info_req = requests.get('https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.
+                                              format(currency_address), timeout=3)
+                token_info_json = token_info_req.json()
+                symbol = token_info_json['symbol']
+                decimals = int(token_info_json['decimals'])
+                price = round(token_info_json['price']['rate'], 3)
+                tx_value = int(nft_other_currency_price) / (1 * 10 ** decimals)
+                usd_nft_cost = round(float(price) * tx_value, 2)
+                print(symbol, price, '$', usd_nft_cost)
+
     def process_via_ether_scan(self):
         try:
+            eth_price_params = {
+                'module': 'stats',
+                'action': 'ethprice',
+                'apikey': self.ether_scan_api_key
+            }
+            eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
+            eth_price_base = eth_price_req.json()['result']
+            eth_usd_price = eth_price_base['ethusd']
             tx_transfer_params = {
                 'module': 'account',
                 'action': 'tokennfttx',
@@ -299,14 +343,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 tx_details_response_base = get_tx_hash_request.json()['result']
                 tx_hex_value = tx_details_response_base['value']
                 tx_value = float(int(tx_hex_value, 16) / 1e18)
-                eth_price_params = {
-                    'module': 'stats',
-                    'action': 'ethprice',
-                    'apikey': self.ether_scan_api_key
-                }
-                eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
-                eth_price_base = eth_price_req.json()['result']
-                eth_usd_price = eth_price_base['ethusd']
                 usd_nft_cost = round(float(eth_usd_price) * tx_value, 2)
                 input_type = tx_details_response_base['input']
                 symbol = 'ETH'
@@ -324,7 +360,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         data = first_log['data']
                         if data != '0x':
                             address = first_log['address']
-                            if address == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':  # WETH is common, no API needed
+                            if str(address).lower() == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':  # WETH is common
                                 symbol = 'WETH'
                                 tx_value = float(int(data, 16) / 1e18)
                                 usd_nft_cost = round(float(eth_usd_price) * tx_value, 2)

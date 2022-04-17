@@ -122,7 +122,6 @@ class ManageMultipleTwitterPosts:
                 image_file = find_file.find(arg[1])
                 if image_file is None:
                     raise Exception('Image DB .json not found. Either type the name correctly or remove the parameter.')
-                # self.args[count][1] = image_file
                 self.args[count - 1][1] = image_file
             else:
                 if type(arg) is not bool:
