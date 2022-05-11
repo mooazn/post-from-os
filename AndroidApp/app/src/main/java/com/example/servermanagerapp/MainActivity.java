@@ -20,8 +20,6 @@ public class MainActivity extends AppCompatActivity {
 
     public void authenticate() {
 
-        // Intent intent = new Intent(this, sshActivity.class);
-
         EditText editText = findViewById(R.id.editText);
         EditText portField = findViewById(R.id.portField);
         EditText usernameField = findViewById(R.id.usernameField);
@@ -32,22 +30,17 @@ public class MainActivity extends AppCompatActivity {
         String username = usernameField.getText().toString();
         String password = passwordField.getText().toString();
 
-        if(host.length() == 0 || host.trim().length() == 0 || port.length() == 0 ||
-                port.trim().length() == 0 || username.length() == 0 ||
-                username.trim().length() == 0 || password.length() == 0 ||
-                password.trim().length() == 0) {
+        if(host.trim().length() == 0 || port.trim().length() == 0 || username.trim().length() == 0
+                || password.trim().length() == 0) {
             Toast.makeText(getApplicationContext(), "Fill in all of the fields.",
                     Toast.LENGTH_LONG).show();
             return;
         }
 
         ServerCredentials serverCredentials = new ServerCredentials(host, port, username, password);
-
-//        intent.putExtra("host", host);
-//        intent.putExtra("port", port);
-//        intent.putExtra("username", username);
-//        intent.putExtra("password", password);
-//        startActivity(intent);
+        Intent intent = new Intent(this, sshActivity.class);
+        intent.putExtra("serverCredentials", serverCredentials);
+        this.startActivity(intent);
         finish();
     }
 }
