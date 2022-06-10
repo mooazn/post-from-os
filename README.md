@@ -12,6 +12,8 @@
 
 https://twitter.com/NoidsSalesBot
 
+https://twitter.com/WhoopBot
+
 https://twitter.com/BoredBananasBot
 
 https://twitter.com/YachtSalesBot
