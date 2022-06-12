@@ -100,7 +100,6 @@ class ManageManager:
             else:
                 needed_channels = []
                 channels = channels.split()
-                self.values[self.contract_addresses[0]] = []
                 sales_channel = int(channels[0])
                 needed_channels.append(sales_channel)
                 if len(channels) > 1:
