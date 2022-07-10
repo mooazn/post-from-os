@@ -1,20 +1,20 @@
 import base64
 import datetime
 from email.mime.text import MIMEText
-import os
+# import os
 import requests
-import selenium.common.exceptions
+# import selenium.common.exceptions
 from requests.structures import CaseInsensitiveDict
-from selenium import webdriver
+# from selenium import webdriver
 import smtplib
 import time
 from tinydb import TinyDB, Query
-from webdriver_manager.chrome import ChromeDriverManager
+# from webdriver_manager.chrome import ChromeDriverManager
 
 
 class _OpenSeaTransactionObjectInstagram:
     def __init__(self, name_, image_url_, seller_, buyer_, nft_price_, usd_price_, total_usd_cost_,
-                 the_date_, the_time_, insta_tags_, key_, symbol_):
+                 the_date_, the_time_, insta_tags_, key_, tx_hash_, symbol_):
         self.insta_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -28,13 +28,14 @@ class _OpenSeaTransactionObjectInstagram:
         self.insta_tags = insta_tags_
         self.is_posted = False
         self.key = key_
+        self.tx_hash = tx_hash_
         self.symbol = symbol_
 
     def __eq__(self, other):
         return self.key == other.key
 
     def __hash__(self):
-        return hash(('tx_hash', self.key))
+        return hash(('key', self.key))
 
     def create_insta_caption(self):
         self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
@@ -93,7 +94,14 @@ class _PostFromOpenSeaInstagram:
             base = self.response.json()['asset_events'][i]
             asset = base['asset']
             tx_hash = str(base['transaction']['transaction_hash'])
-            token_id = asset['token_id']
+            try:
+                token_id = asset['token_id']
+            except Exception:
+                continue
+            key = tx_hash
+            tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
+            if tx_exists:
+                continue
             key = tx_hash + ' ' + token_id
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
             if tx_exists:
@@ -136,7 +144,7 @@ class _PostFromOpenSeaInstagram:
             the_time = timestamp[1]
             transaction = _OpenSeaTransactionObjectInstagram(name, image_url, seller, buyer, nft_price, usd_price,
                                                              total_usd_cost, the_date, the_time, self.insta_tags,
-                                                             key, symbol)
+                                                             key, tx_hash, symbol)
             transaction.create_insta_caption()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -203,7 +211,7 @@ class _PostFromOpenSeaInstagram:
 
             querystring = {"access_token": user_access_token}
             headers = {"Accept": "application/json"}
-            response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=2)
+            response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=5)
             insta_id = response.json()['instagram_business_account']['id']
 
             pre_upload_url = self.graph_api_url + '{}/media'.format(insta_id)
@@ -223,6 +231,7 @@ class _PostFromOpenSeaInstagram:
                 requests.post(publish_url, data=publish, timeout=10)
                 self.os_obj_to_post.is_posted = True
                 self.tx_db.insert({'tx': self.os_obj_to_post.key})
+                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
                 self.daily_posts += 1
                 return True
             else:
@@ -237,13 +246,13 @@ class ManageFlowObj:
     def __init__(self, instagram_values_file, instagram_generate_long_user_token_credentials_file):
         self.instagram_values_file = instagram_values_file
         self.instagram_gen_token_file = instagram_generate_long_user_token_credentials_file
-        contract_address = self.validate_params()
+        self.contract_address = self.validate_params()
         self.begin_time = int(time.time())
-        self.gen_long_lived_token_class = GenerateLongLivedToken(self.instagram_gen_token_file, contract_address)
+        # self.gen_long_lived_token_class = GenerateLongLivedToken(self.instagram_gen_token_file, contract_address)
         # first_time_generated = self.gen_long_lived_token_class.generate()
         # if first_time_generated:
         #     print('Generated token for first time!', flush=True)
-        self.__base_obj = _PostFromOpenSeaInstagram(self.instagram_values_file, contract_address)
+        self.__base_obj = _PostFromOpenSeaInstagram(self.instagram_values_file, self.contract_address)
         self.begin()
 
     def validate_params(self):
@@ -296,14 +305,14 @@ class ManageFlowObj:
         print('IMG BB key validated...')
         test_page_id = test_instagram_values.readline().strip()
         print('Page ID is:', test_page_id)
-        # test_insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
-        #     format(test_page_id)
-        # test_page_req = requests.get(test_insta_id_url, timeout=2)
-        # fake_status_code = int(test_page_req.json()['error']['code'])
-        # if fake_status_code != 200:
-        #     test_instagram_values.close()
-        #     raise Exception('Invalid page ID for Facebook supplied')
-        # print('Facebook page ID validated...')
+        test_insta_id_url = 'https://graph.facebook.com/v10.0/{}?fields=instagram_business_account'. \
+            format(test_page_id)
+        test_page_req = requests.get(test_insta_id_url, timeout=2)
+        fake_status_code = int(test_page_req.json()['error']['code'])
+        if fake_status_code != 200:
+            test_instagram_values.close()
+            raise Exception('Invalid page ID for Facebook supplied')
+        print('Facebook page ID validated...')
         test_os_key = test_instagram_values.readline().strip()
         if test_os_key != 'None':
             test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
@@ -343,14 +352,14 @@ class ManageFlowObj:
         image_downloaded = self.__base_obj.download_image()
         if image_downloaded == -1:
             print('Daily limit reached for posts.')
-            time.sleep(30)
+            time.sleep(3600)
         elif image_downloaded:
-            self.post_to_image_bb(date_time_now)
+            self.try_to_post_to_image_bb(date_time_now)
         else:
             print('Downloading image error at roughly', date_time_now, flush=True)
             time.sleep(60)
 
-    def post_to_image_bb(self, date_time_now):
+    def try_to_post_to_image_bb(self, date_time_now):
         posted_to_image_bb = self.__base_obj.post_to_image_bb()
         if posted_to_image_bb:
             self.try_to_post_to_instagram(date_time_now)
@@ -372,7 +381,7 @@ class ManageFlowObj:
             date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
             self.run_methods(date_time_now)
             if int(time.time()) - self.begin_time >= 3600 * 24 * 45:
-                self.gen_long_lived_token_class.send_email_to_manually_change_user_token()
+                self.send_email_to_manually_change_user_token()
             # time_now = int(time.time())
             # time_elapsed_since_token_generated = None
             # if self.gen_long_lived_token_class.previous_time is not None:
@@ -387,28 +396,135 @@ class ManageFlowObj:
             #         print('Generated new long lived user access token at roughly', date_time_now, flush=True)
             #     else:
             #         print('Generating token failed. Email sent.', date_time_now, flush=True)
+#
+#
+# class GenerateLongLivedToken:
+#     def __init__(self, token_file, contract_address):
+#         self.driver = None
+#         self.generated_time = None
+#         self.graph_explorer_url_redirect = 'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers' \
+#                                            '.facebook.com%2Ftools%2Fexplorer%2F'
+#         self.api_fb_exchange_token_url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'
+#         self.graph_explorer_url = 'https://developers.facebook.com/tools/explorer/'
+#         self.email_field_xpath = '//*[@id="email"]'
+#         self.pwd_field_xpath = '//*[@id="pass"]'
+#         self.login_btn_xpath = '//*[@id="loginbutton"]'
+#         self.gen_btn_xpath = '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[' \
+#                              '5]/div[5]/div/div/div/div/div/div[2]/div/button '
+#         self.continue_btn_xpath = '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div[1]/div[2]'
+#         self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
+#                               '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input'
+#         with open(token_file) as tokens:
+#             if 7 > len(tokens.readlines()) > 8:
+#                 raise Exception('The Instagram Generate User Token Values file must be formatted correctly.')
+#         tokens = open(token_file, 'r')
+#         self.client_id = tokens.readline().strip()
+#         self.client_secret = tokens.readline().strip()
+#         self.facebook_email = tokens.readline().strip()
+#         self.facebook_password = tokens.readline().strip()
+#         self.gmail_email = tokens.readline().strip()
+#         self.gmail_password = tokens.readline().strip()
+#         self.gmail_to_email = tokens.readline().strip()
+#         self.access_token = tokens.readline().strip()
+#         tokens.close()
+#         self.first_time = True
+#         self.previous_time = None
+#         self.user_access_token_file = 'instagram_user_access_token_{}.txt'.format(contract_address)
+#         with open(self.user_access_token_file, 'w') as tk_file:
+#             if self.access_token != '':
+#                 tk_file.write(self.access_token)
+#         # if os.path.exists(self.user_access_token_file):
+#         #     get_time_from_token_file = open(self.user_access_token_file, 'r')
+#         #     get_time_from_token_file.readline().strip()
+#         #     previous_generated_time = int(get_time_from_token_file.readline().strip())
+#         #     difference = int(time.time()) - previous_generated_time
+#         #     if difference < 3600 * 24 * 50:
+#         #         self.previous_time = previous_generated_time
+#
+#     def generate(self):
+#         if self.previous_time is not None:
+#             print('Using already existing token', flush=True)
+#             return False
+#         try:
+#             short_lived_access_token = self.generate_short_lived_user_access_token()
+#             new_token = self.get_long_lived_user_access_token(short_lived_access_token)
+#             self.replace_old_token_with_new(new_token)
+#             self.generated_time = int(time.time())
+#             if self.first_time:
+#                 self.first_time = False
+#             return True
+#         except Exception as e:  # if ANY sort of error happens, we must manually reset
+#             if self.first_time:  # script MUST always work for the first time. of course, it may fail 50+ days from now
+#                 # if the website is changed, but then it is handled accordingly by sending an email and further
+#                 # inspection can take place to fix the script.
+#                 raise Exception('Provided Instagram Generate User Token file is formatted incorrectly.')
+#             print(e, flush=True)
+#             self.driver.quit()
+#             self.send_email_to_manually_change_user_token()
+#             self.generated_time = int(time.time()) + 3600 * 24 * 2  # allow 2 days for manual reset
+#             return False
+#
+#     def generate_short_lived_user_access_token(self):
+#         options = webdriver.ChromeOptions()
+#         options.add_argument('--no-sandbox')
+#         options.add_argument("--kiosk")
+#         options.headless = True
+#         options.add_argument('--disable-dev-shm-usage')
+#         self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+#         self.driver.get(self.graph_explorer_url_redirect)
+#         email_field = self.driver.find_element_by_xpath(self.email_field_xpath)
+#         email_field.send_keys(self.facebook_email)
+#         password_field = self.driver.find_element_by_xpath(self.pwd_field_xpath)
+#         password_field.send_keys(self.facebook_password)
+#         login_button = self.driver.find_element_by_xpath(self.login_btn_xpath)
+#         login_button.click()
+#         time.sleep(3)
+#         self.driver.get(self.graph_explorer_url)
+#         gen_short_lived_access_token_button = self.driver.find_element_by_xpath(self.gen_btn_xpath)
+#         gen_short_lived_access_token_button.click()
+#         window_before = self.driver.window_handles[0]
+#         window_after = self.driver.window_handles[1]
+#         self.driver.switch_to.window(window_after)
+#         self.driver.maximize_window()
+#         continue_button = self.driver.find_element_by_xpath(self.continue_btn_xpath)
+#         continue_button.click()
+#         self.driver.implicitly_wait(3)
+#         close_again_flag = True
+#         try:
+#             short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
+#         except selenium.common.exceptions.NoSuchWindowException:
+#             self.driver.switch_to.window(window_before)
+#             short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
+#             close_again_flag = False
+#         self.driver.close()
+#         if close_again_flag:
+#             self.driver.switch_to.window(window_before)
+#             self.driver.close()
+#         self.driver.quit()
+#         return short_lived_access_token
+#
+#     def get_long_lived_user_access_token(self, short_lived_access_token):
+#         querystring = {"client_id": self.client_id,
+#                        "client_secret": self.client_secret,
+#                        "fb_exchange_token": short_lived_access_token}
+#
+#         headers = {"Accept": "application/json"}
+#         response = requests.get(self.api_fb_exchange_token_url, headers=headers, params=querystring, timeout=2)
+#         long_lived_access_token = response.json()['access_token']
+#         return long_lived_access_token
+#
+#     def replace_old_token_with_new(self, token):
+#         if os.path.exists(self.user_access_token_file):
+#             os.remove(self.user_access_token_file)
+#         token_file = open(self.user_access_token_file, 'w')
+#         token_file.write(token + '\n')
+#         token_file.write(str(int(time.time())))
+#         token_file.close()
+#
 
-
-class GenerateLongLivedToken:
-    def __init__(self, token_file, contract_address):
-        self.driver = None
-        self.generated_time = None
-        self.graph_explorer_url_redirect = 'https://www.facebook.com/login/?next=https%3A%2F%2Fdevelopers' \
-                                           '.facebook.com%2Ftools%2Fexplorer%2F'
-        self.api_fb_exchange_token_url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'
-        self.graph_explorer_url = 'https://developers.facebook.com/tools/explorer/'
-        self.email_field_xpath = '//*[@id="email"]'
-        self.pwd_field_xpath = '//*[@id="pass"]'
-        self.login_btn_xpath = '//*[@id="loginbutton"]'
-        self.gen_btn_xpath = '//*[@id="facebook"]/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[' \
-                             '5]/div[5]/div/div/div/div/div/div[2]/div/button '
-        self.continue_btn_xpath = '//*[@id="platformDialogForm"]/div/div/div/div/div/div[3]/div[1]/div[1]/div[2]'
-        self.copy_btn_xpath = '/html/body/div[1]/div[5]/div[2]/div/div[2]/span/div/div[2]/div/div[5]/div[' \
-                              '5]/div/div/div/div/div/div[2]/div/div/div[1]/label/input'
-        with open(token_file) as tokens:
-            if 7 > len(tokens.readlines()) > 8:
-                raise Exception('The Instagram Generate User Token Values file must be formatted correctly.')
-        tokens = open(token_file, 'r')
+    def send_email_to_manually_change_user_token(self):
+        self.user_access_token_file = 'instagram_user_access_token_{}.txt'.format(self.contract_address)
+        tokens = open(self.instagram_gen_token_file, 'r')
         self.client_id = tokens.readline().strip()
         self.client_secret = tokens.readline().strip()
         self.facebook_email = tokens.readline().strip()
@@ -418,101 +534,6 @@ class GenerateLongLivedToken:
         self.gmail_to_email = tokens.readline().strip()
         self.access_token = tokens.readline().strip()
         tokens.close()
-        self.first_time = True
-        self.previous_time = None
-        self.user_access_token_file = 'instagram_user_access_token_{}.txt'.format(contract_address)
-        with open(self.user_access_token_file, 'w') as tk_file:
-            if self.access_token != '':
-                tk_file.write(self.access_token)
-        # if os.path.exists(self.user_access_token_file):
-        #     get_time_from_token_file = open(self.user_access_token_file, 'r')
-        #     get_time_from_token_file.readline().strip()
-        #     previous_generated_time = int(get_time_from_token_file.readline().strip())
-        #     difference = int(time.time()) - previous_generated_time
-        #     if difference < 3600 * 24 * 50:
-        #         self.previous_time = previous_generated_time
-
-    def generate(self):
-        if self.previous_time is not None:
-            print('Using already existing token', flush=True)
-            return False
-        try:
-            short_lived_access_token = self.generate_short_lived_user_access_token()
-            new_token = self.get_long_lived_user_access_token(short_lived_access_token)
-            self.replace_old_token_with_new(new_token)
-            self.generated_time = int(time.time())
-            if self.first_time:
-                self.first_time = False
-            return True
-        except Exception as e:  # if ANY sort of error happens, we must manually reset
-            if self.first_time:  # script MUST always work for the first time. of course, it may fail 50+ days from now
-                # if the website is changed, but then it is handled accordingly by sending an email and further
-                # inspection can take place to fix the script.
-                raise Exception('Provided Instagram Generate User Token file is formatted incorrectly.')
-            print(e, flush=True)
-            self.driver.quit()
-            self.send_email_to_manually_change_user_token()
-            self.generated_time = int(time.time()) + 3600 * 24 * 2  # allow 2 days for manual reset
-            return False
-
-    def generate_short_lived_user_access_token(self):
-        options = webdriver.ChromeOptions()
-        options.add_argument('--no-sandbox')
-        options.add_argument("--kiosk")
-        options.headless = True
-        options.add_argument('--disable-dev-shm-usage')
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-        self.driver.get(self.graph_explorer_url_redirect)
-        email_field = self.driver.find_element_by_xpath(self.email_field_xpath)
-        email_field.send_keys(self.facebook_email)
-        password_field = self.driver.find_element_by_xpath(self.pwd_field_xpath)
-        password_field.send_keys(self.facebook_password)
-        login_button = self.driver.find_element_by_xpath(self.login_btn_xpath)
-        login_button.click()
-        time.sleep(3)
-        self.driver.get(self.graph_explorer_url)
-        gen_short_lived_access_token_button = self.driver.find_element_by_xpath(self.gen_btn_xpath)
-        gen_short_lived_access_token_button.click()
-        window_before = self.driver.window_handles[0]
-        window_after = self.driver.window_handles[1]
-        self.driver.switch_to.window(window_after)
-        self.driver.maximize_window()
-        continue_button = self.driver.find_element_by_xpath(self.continue_btn_xpath)
-        continue_button.click()
-        self.driver.implicitly_wait(3)
-        close_again_flag = True
-        try:
-            short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
-        except selenium.common.exceptions.NoSuchWindowException:
-            self.driver.switch_to.window(window_before)
-            short_lived_access_token = self.driver.find_element_by_xpath(self.copy_btn_xpath).get_attribute('value')
-            close_again_flag = False
-        self.driver.close()
-        if close_again_flag:
-            self.driver.switch_to.window(window_before)
-            self.driver.close()
-        self.driver.quit()
-        return short_lived_access_token
-
-    def get_long_lived_user_access_token(self, short_lived_access_token):
-        querystring = {"client_id": self.client_id,
-                       "client_secret": self.client_secret,
-                       "fb_exchange_token": short_lived_access_token}
-
-        headers = {"Accept": "application/json"}
-        response = requests.get(self.api_fb_exchange_token_url, headers=headers, params=querystring, timeout=2)
-        long_lived_access_token = response.json()['access_token']
-        return long_lived_access_token
-
-    def replace_old_token_with_new(self, token):
-        if os.path.exists(self.user_access_token_file):
-            os.remove(self.user_access_token_file)
-        token_file = open(self.user_access_token_file, 'w')
-        token_file.write(token + '\n')
-        token_file.write(str(int(time.time())))
-        token_file.close()
-
-    def send_email_to_manually_change_user_token(self):
         smtp_server = "smtp.gmail.com"
         smtp_port = 587
         smtp_username = self.gmail_email
