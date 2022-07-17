@@ -26,6 +26,8 @@ https://www.instagram.com/sirens_of_the_sea_sales_bot/
 
 #### Discord Bot (for the server):
 
+https://twitter.com/WDoopsies
+
 https://twitter.com/ApeHarbour
 
 ---

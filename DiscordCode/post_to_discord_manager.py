@@ -20,13 +20,14 @@ GAS_CACHE = []
 
 
 class ManageManager:
-    def __init__(self, discord_values_file, file_name: str):
+    def __init__(self, discord_values_file, file_name: str, traits: bool):
         global VALUES, CONTRACT_ADDRESSES
         self.discord_values = discord_values_file
         self.contract_addresses = CONTRACT_ADDRESSES
         self.has_listings = []
         self.values = VALUES
         self.file_name = file_name
+        self.traits = traits
         self.validate_params_and_run()
 
     def validate_params_and_run(self):
@@ -227,7 +228,7 @@ class ManageManager:
         for ca, v in self.values.items():
             values_listing.append([[v[0], ca, v[2], v[3], v[4]], v[1]])
         async_code = importlib.import_module(self.file_name[:-3])
-        async_code.run(CLIENT, values_listing)
+        async_code.run(CLIENT, values_listing, self.traits)
         CLIENT.loop.create_task(update_gas_presence())
         try:
             print('Beginning program...')
@@ -286,14 +287,15 @@ class ManageManager:
                                 format(index))
                 code_file.write(listings_boiler_plate_code + '\n\n')
             index += 1
-        code_file.write('''def run(client, values):\n{}'''.format(space))
+        code_file.write('''def run(client, values, traits):\n{}'''.format(space))
         index = 0
         for _ in self.values.items():
-            code_file.write('''sales_obj_{} = ManageFlowObj(values[{}][0])\n{}'''.format(index, index, space))
+            code_file.write('''sales_obj_{} = ManageFlowObj(values[{}][0], traits)\n{}'''.format(index, index, space))
             code_file.write('''client.loop.create_task(process_sales_{}(client, sales_obj_{}, values[{}][1][0]))\n{}'''.
                             format(index, index, index, space))
             if self.has_listings[index]:
-                code_file.write('''listings_obj_{} = ManageFlowObj(values[{}][0])\n{}'''.format(index, index, space))
+                code_file.write('''listings_obj_{} = ManageFlowObj(values[{}][0], traits)\n{}'''.
+                                format(index, index, space))
                 code_file.write(
                     '''client.loop.create_task(process_listings_{}(client, listings_obj_{}, values[{}][1][1]))\n{}'''.
                     format(index, index, index, space))

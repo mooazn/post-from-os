@@ -3,6 +3,7 @@ import discord
 from discord.embeds import EmptyEmbed
 from enum import Enum
 from fake_useragent import UserAgent
+from operator import itemgetter
 import requests
 from requests.structures import CaseInsensitiveDict
 import time
@@ -21,7 +22,7 @@ class _OpenSeaTransactionObject:
 
     def __init__(self, name_, image_url_, seller_, buyer_, nft_price_, total_usd_cost_, link_, tx_type_,
                  image_thumbnail_url_, embed_icon_url_, rgb_color_, seller_link_, buyer_link_, num_of_assets_,
-                 symbol_=None):
+                 symbol_, rare_trait_list_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -40,42 +41,51 @@ class _OpenSeaTransactionObject:
         self.buyer_link = buyer_link_
         self.num_of_assets = num_of_assets_
         self.symbol = symbol_
+        self.rare_trait_list = rare_trait_list_
 
     def create_discord_embed(self):
         icon_url = str(self.embed_icon_url) if self.embed_icon_url != 'None' else EmptyEmbed
         embed_color = discord.Color.from_rgb(self.r, self.g, self.b)
         embed = None
         title = self.name
+        trait_desc = ''
+        if self.rare_trait_list:
+            for trait in self.rare_trait_list:
+                trait_desc += trait[0] + ': ' + trait[1] + ' - ' + str(trait[2]) + '%' + '\n'
         if self.num_of_assets > 1:
             title = str(self.num_of_assets) + ' assets bought'
         if self.tx_type == EventType.SALE.value:
-            embed = discord.Embed(title=title, url=self.link,
-                                  description='{} {} (${})'.format(self.nft_price, self.symbol, self.total_usd_cost)
-                                              + '\n\n' + 'Seller: [{}]({})\nBuyer: [{}]({})'.format(self.seller,
-                                                                                                    self.seller_link,
-                                                                                                    self.buyer,
-                                                                                                    self.buyer_link),
-                                  color=embed_color)
+            embed = \
+                discord.Embed(title=title, url=self.link,
+                              description='{} {} (${})'.format(self.nft_price, self.symbol, self.total_usd_cost) +
+                                          '\n' + ('\nRare Traits:' + '\n\n' + trait_desc if trait_desc != '' else '')
+                              + '\nSeller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link, self.buyer,
+                                                                             self.buyer_link),
+                              color=embed_color)
             embed.set_author(name='New Purchase!', icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
-            embed = discord.Embed(title=self.name, url=self.link, description='Ξ{} (${})'.format(
-                self.nft_price, self.total_usd_cost) + '\n\n' + 'Seller: [{}]({})'.format(self.seller,
-                                                                                          self.seller_link),
-                                  color=embed_color)
+            embed = \
+                discord.Embed(title=self.name, url=self.link,
+                              description='{} {} (${})'.format(self.nft_price, self.symbol, self.total_usd_cost) +
+                                          '\n' + ('\nRare Traits:' + '\n\n' + trait_desc if trait_desc != '' else '') +
+                              '\n Seller: [{}]({})'.format(self.seller, self.seller_link), color=embed_color)
             embed.set_author(name='New Listing!', icon_url=icon_url)
             embed.set_image(url=self.image_thumbnail_url)
         self.discord_embed = embed
 
 
 class _PostFromOpenSeaDiscord:
-    def __init__(self, values):
+    def __init__(self, values, needs_traits):
+        self.needs_traits = needs_traits
         self.collection_name = values[0]
         self.contract_address = values[1]
         self.embed_icon_url = values[2]
         self.embed_rgb_color = values[3]
         self.os_api_key = values[4]
         self.os_events_url = 'https://api.opensea.io/api/v1/events'
+        self.os_asset_url = 'https://api.opensea.io/api/v1/asset/'
+        self.total_supply = -1
         self.response = None
         self.os_obj_to_post = None
         self.tx_type = None
@@ -108,6 +118,41 @@ class _PostFromOpenSeaDiscord:
         except Exception as e:
             print(e, flush=True)
             return False
+
+    def create_rare_trait_list(self, token_id):
+        if self.total_supply == -1:
+            test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
+            test_response = requests.get(test_collection_name_url)
+            if test_response.status_code == 200:
+                collection_json = test_response.json()['collection']
+                stats_json = collection_json['stats']
+                self.total_supply = int(stats_json['total_supply'])
+            else:
+                return []
+        try:
+            rare_trait_list = []
+            traits = None
+            asset_url = self.os_asset_url + self.contract_address + '/' + token_id
+            asset_headers = CaseInsensitiveDict()
+            asset_headers['User-Agent'] = self.ua.random
+            asset_headers['x-api-key'] = self.os_api_key
+            asset_response = requests.get(asset_url, headers=asset_headers, timeout=3)
+            if asset_response.status_code == 200:
+                traits = asset_response.json()['traits']
+            if traits is None:
+                return
+            for trait in traits:
+                trait_type = trait['trait_type']
+                trait_value = trait['value']
+                trait_count = trait['trait_count']
+                rarity_decimal = float(trait_count / self.total_supply)
+                if rarity_decimal <= 0.05:
+                    rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
+            rare_trait_list.sort(key=itemgetter(2))
+            return rare_trait_list
+        except Exception as e:
+            print(e, flush=True)
+            return
 
     def parse_response_objects(self):
         for i in range(0, self.limit):
@@ -152,7 +197,7 @@ class _PostFromOpenSeaDiscord:
                     transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, nft_price,
                                                             total_usd_cost, link, self.tx_type, None,
                                                             self.embed_icon_url, self.embed_rgb_color, seller_link,
-                                                            buyer_link, num_of_assets, symbol)
+                                                            buyer_link, num_of_assets, symbol, None)
                     transaction.create_discord_embed()
                     self.tx_queue.append(transaction)
                     continue
@@ -181,8 +226,11 @@ class _PostFromOpenSeaDiscord:
             except TypeError:
                 buyer = buyer_address[0:8]
             transaction = None
+            token_id = asset['token_id']
+            rare_trait_list = []
+            if self.needs_traits:
+                rare_trait_list = self.create_rare_trait_list(token_id)
             if self.tx_type == EventType.SALE.value:
-                token_id = asset['token_id']
                 tx_hash = str(base['transaction']['transaction_hash'])
                 key = tx_hash + ' ' + token_id
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
@@ -202,7 +250,7 @@ class _PostFromOpenSeaDiscord:
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, nft_price,
                                                         total_usd_cost, link, self.tx_type, image_thumbnail_url,
                                                         self.embed_icon_url, self.embed_rgb_color, seller_link,
-                                                        buyer_link, 1, symbol)
+                                                        buyer_link, 1, symbol, rare_trait_list)
             elif self.tx_type == EventType.LISTING.value:
                 try:
                     listing_id = str(base['id'])
@@ -213,13 +261,15 @@ class _PostFromOpenSeaDiscord:
                     continue
                 self.id_db.insert({'id': listing_id})
                 try:
+                    symbol = base['payment_token']['symbol']
                     price = float('{0:.5f}'.format(int(base['starting_price']) / 1e18))
                     total_usd_cost = '{:.2f}'.format(round(price * usd_price, 2))
                 except (ValueError, TypeError):
                     continue
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, total_usd_cost, link,
                                                         self.tx_type, image_thumbnail_url, self.embed_icon_url,
-                                                        self.embed_rgb_color, seller_link, buyer_link, 1)
+                                                        self.embed_rgb_color, seller_link, buyer_link, 1, symbol,
+                                                        rare_trait_list)
             # elif ...:
             #     pass
             transaction.create_discord_embed()
@@ -245,8 +295,8 @@ class _PostFromOpenSeaDiscord:
 
 
 class ManageFlowObj:
-    def __init__(self, values):
-        self.base_obj = _PostFromOpenSeaDiscord(values)
+    def __init__(self, values, needs_traits):
+        self.base_obj = _PostFromOpenSeaDiscord(values, needs_traits)
         self.tx_type = None
         self.date_time_now = None
 

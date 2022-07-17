@@ -43,9 +43,9 @@ async def process_sales_1(client, sales_obj, sales_channel):
             await asyncio.sleep(10)
             
 
-def run(client, values):
-    sales_obj_0 = ManageFlowObj(values[0][0])
+def run(client, values, traits):
+    sales_obj_0 = ManageFlowObj(values[0][0], traits)
     client.loop.create_task(process_sales_0(client, sales_obj_0, values[0][1][0]))
-    sales_obj_1 = ManageFlowObj(values[1][0])
+    sales_obj_1 = ManageFlowObj(values[1][0], traits)
     client.loop.create_task(process_sales_1(client, sales_obj_1, values[1][1][0]))
     

@@ -9,6 +9,9 @@ DiscordCode/discord_values_yachts.txt
 DiscordCode/discord_values_yachts_real.txt
 DiscordCode/post_yachts_discord.py
 DiscordCode/asynchronous_discord_code_yachts.py
+DiscordCode/asynchronous_discord_code_whoops.py
+DiscordCode/discord_values_whoops.txt
+DiscordCode/post_whoops_discord.py
 
 HelperCode/banana_trait_db.json
 HelperCode/generator_values_for_tmux_file.txt
@@ -35,6 +38,8 @@ TwitterCode/twitter_values_banana.txt
 TwitterCode/twitter_values_humanoids.txt
 TwitterCode/twitter_values_sirens.txt
 TwitterCode/twitter_values_yachts.txt
+TwitterCode/post_whoops_twitter.py
+TwitterCode/twitter_values_whoops.txt
 
 BuildBotsWebApp/website_key.txt
 
