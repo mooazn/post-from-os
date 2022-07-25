@@ -22,7 +22,7 @@ class _OpenSeaTransactionObject:
 
     def __init__(self, name_, image_url_, seller_, buyer_, nft_price_, total_usd_cost_, link_, tx_type_,
                  image_thumbnail_url_, embed_icon_url_, rgb_color_, seller_link_, buyer_link_, num_of_assets_,
-                 symbol_, rare_trait_list_):
+                 symbol_, rare_trait_list_, key_, db_):
         self.name = name_
         self.image_url = image_url_
         self.seller = seller_
@@ -42,6 +42,14 @@ class _OpenSeaTransactionObject:
         self.num_of_assets = num_of_assets_
         self.symbol = symbol_
         self.rare_trait_list = rare_trait_list_
+        self.key = key_
+        self.db = db_
+
+    def __eq__(self, other):
+        return self.key == other.key
+    
+    def __hash__(self):
+        return hash(('key', self.key))
 
     def create_discord_embed(self):
         icon_url = str(self.embed_icon_url) if self.embed_icon_url != 'None' else EmptyEmbed
@@ -94,7 +102,7 @@ class _PostFromOpenSeaDiscord:
         self.id_db = TinyDB(self.collection_name + '_listing_id_discord_db.json')
         self.id_query = Query()
         self.tx_queue = []
-        self.limit = 5
+        self.limit = 10
         self.ua = UserAgent()
 
     def get_recent_sales(self, tx_type):
@@ -168,7 +176,6 @@ class _PostFromOpenSeaDiscord:
                     tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                     if tx_exists:
                         continue
-                    self.tx_db.insert({'tx': key})
                     image_url = bundle['asset_contract']['collection']['featured_image_url']
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
@@ -197,7 +204,7 @@ class _PostFromOpenSeaDiscord:
                     transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, nft_price,
                                                             total_usd_cost, link, self.tx_type, None,
                                                             self.embed_icon_url, self.embed_rgb_color, seller_link,
-                                                            buyer_link, num_of_assets, symbol, None)
+                                                            buyer_link, num_of_assets, symbol, None, key, self.tx_db)
                     transaction.create_discord_embed()
                     self.tx_queue.append(transaction)
                     continue
@@ -236,7 +243,6 @@ class _PostFromOpenSeaDiscord:
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
                     continue
-                self.tx_db.insert({'tx': key})
                 if seller_address == buyer_address or seller == buyer:
                     continue
                 try:
@@ -250,16 +256,16 @@ class _PostFromOpenSeaDiscord:
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, nft_price,
                                                         total_usd_cost, link, self.tx_type, image_thumbnail_url,
                                                         self.embed_icon_url, self.embed_rgb_color, seller_link,
-                                                        buyer_link, 1, symbol, rare_trait_list)
+                                                        buyer_link, 1, symbol, rare_trait_list, key, self.tx_db)
             elif self.tx_type == EventType.LISTING.value:
                 try:
                     listing_id = str(base['id'])
                 except TypeError:
                     continue
-                listing_exists = False if len(self.id_db.search(self.id_query.id == listing_id)) == 0 else True
+                key = listing_id + ' ' + token_id
+                listing_exists = False if len(self.id_db.search(self.id_query.id == key)) == 0 else True
                 if listing_exists:
                     continue
-                self.id_db.insert({'id': listing_id})
                 try:
                     symbol = base['payment_token']['symbol']
                     price = float('{0:.5f}'.format(int(base['starting_price']) / 1e18))
@@ -269,9 +275,7 @@ class _PostFromOpenSeaDiscord:
                 transaction = _OpenSeaTransactionObject(name, image_url, seller, buyer, price, total_usd_cost, link,
                                                         self.tx_type, image_thumbnail_url, self.embed_icon_url,
                                                         self.embed_rgb_color, seller_link, buyer_link, 1, symbol,
-                                                        rare_trait_list)
-            # elif ...:
-            #     pass
+                                                        rare_trait_list, key, self.id_db)
             transaction.create_discord_embed()
             self.tx_queue.append(transaction)
         return self.process_queue()
@@ -281,10 +285,17 @@ class _PostFromOpenSeaDiscord:
             for first in self.tx_db:
                 self.tx_db.remove(doc_ids=[first.doc_id])
                 break
+        if len(self.id_db) > 200:
+            for first in self.id_db:
+                self.id_db.remove(doc_ids=[first.doc_id])
+                break
         index = 0
+        self.tx_queue = list(set(self.tx_queue))
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]
-            if cur_os_obj.is_posted:
+            sale_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.key))) == 0 else True
+            listing_exists = False if len(self.id_db.search(self.id_query.id == str(cur_os_obj.key))) == 0 else True
+            if cur_os_obj.is_posted or sale_exists or listing_exists:
                 self.tx_queue.pop(index)
             else:
                 index += 1
@@ -322,6 +333,10 @@ class ManageFlowObj:
 async def try_to_post_embed_to_discord(mfo, channel):
     try:
         await channel.send(embed=mfo.base_obj.os_obj_to_post.discord_embed)
+        if mfo.base_obj.os_obj_to_post.tx_type == EventType.SALE.value:
+            mfo.base_obj.os_obj_to_post.db.insert({'tx': mfo.base_obj.os_obj_to_post.key})
+        elif mfo.base_obj.os_obj_to_post.tx_type == EventType.LISTING.value:
+            mfo.base_obj.os_obj_to_post.db.insert({'id': mfo.base_obj.os_obj_to_post.key})
         mfo.base_obj.os_obj_to_post.is_posted = True
         print('Posted to Discord at roughly', mfo.date_time_now, flush=True)
         return True
