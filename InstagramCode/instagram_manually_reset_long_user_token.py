@@ -2,8 +2,8 @@ import requests
 
 
 tokens = open('instagram_generate_user_token_values_sirens.txt', 'r')
-client_id = tokens.readline().strip()
-client_secret = tokens.readline().strip()
+client_id = tokens.readline().strip()  # OR PASTE HERE
+client_secret = tokens.readline().strip()  # OR PASTE HERE
 tokens.close()
 short_lived_access_token = 'PASTE HERE'
 api_fb_exchange_token_url = 'https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token'

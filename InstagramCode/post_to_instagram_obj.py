@@ -38,12 +38,10 @@ class _OpenSeaTransactionObjectInstagram:
         return hash(('key', self.key))
 
     def create_insta_caption(self):
-        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
-                             'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} {} and ' \
-                             'the price of {} was ${}.\n\n{}'.format(self.name, self.the_date, self.the_time,
-                                                                     self.seller, self.buyer, self.total_usd_cost,
-                                                                     self.eth_nft_price, self.symbol, self.symbol,
-                                                                     self.usd_price, self.insta_tags)
+        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\n{} has bought the NFT for the price of ${}!' \
+                             '\n\nAt the time of purchase, the price of the NFT was {} {}.\n\n{}'.\
+            format(self.name, self.the_date, self.the_time, self.buyer, self.total_usd_cost, self.eth_nft_price,
+                   self.symbol, self.insta_tags)
 
 
 class _PostFromOpenSeaInstagram:
@@ -96,7 +94,8 @@ class _PostFromOpenSeaInstagram:
             tx_hash = str(base['transaction']['transaction_hash'])
             try:
                 token_id = asset['token_id']
-            except Exception:
+            except Exception as e:
+                print(e, flush=True)
                 continue
             key = tx_hash
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
@@ -125,8 +124,6 @@ class _PostFromOpenSeaInstagram:
                     buyer = buyer_address[0:8]
             except TypeError:
                 buyer = buyer_address[0:8]
-            if seller_address == buyer_address or seller == buyer:
-                continue
             try:
                 decimals = int(base['payment_token']['decimals'])
                 symbol = base['payment_token']['symbol']
@@ -454,7 +451,7 @@ class ManageFlowObj:
 #                 self.first_time = False
 #             return True
 #         except Exception as e:  # if ANY sort of error happens, we must manually reset
-#             if self.first_time:  # script MUST always work for the first time. of course, it may fail 50+ days from now
+#             if self.first_time:  # script MUST always work for the first time. it may fail 50+ days from now
 #                 # if the website is changed, but then it is handled accordingly by sending an email and further
 #                 # inspection can take place to fix the script.
 #                 raise Exception('Provided Instagram Generate User Token file is formatted incorrectly.')

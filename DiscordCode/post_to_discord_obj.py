@@ -67,9 +67,7 @@ class _OpenSeaTransactionObject:
                 discord.Embed(title=title, url=self.link,
                               description='{} {} (${})'.format(self.nft_price, self.symbol, self.total_usd_cost) +
                                           '\n' + ('\nRare Traits:' + '\n\n' + trait_desc if trait_desc != '' else '')
-                              + '\nSeller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link, self.buyer,
-                                                                             self.buyer_link),
-                              color=embed_color)
+                              + '\nBuyer: [{}]({})'.format(self.buyer, self.buyer_link), color=embed_color)
             embed.set_author(name='New Purchase!', icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
@@ -242,8 +240,6 @@ class _PostFromOpenSeaDiscord:
                 key = tx_hash + ' ' + token_id
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
-                    continue
-                if seller_address == buyer_address or seller == buyer:
                     continue
                 try:
                     decimals = int(base['payment_token']['decimals'])
