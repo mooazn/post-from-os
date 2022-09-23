@@ -20,7 +20,7 @@ class _OpenSeaTransactionObjectInstagram:
         self.image_url = image_url_
         self.seller = seller_
         self.buyer = buyer_
-        self.eth_nft_price = nft_price_
+        self.nft_price = nft_price_
         self.usd_price = usd_price_
         self.total_usd_cost = total_usd_cost_
         self.the_date = the_date_
@@ -38,10 +38,12 @@ class _OpenSeaTransactionObjectInstagram:
         return hash(('key', self.key))
 
     def create_insta_caption(self):
-        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\n{} has bought the NFT for the price of ${}!' \
-                             '\n\nAt the time of purchase, the price of the NFT was {} {}.\n\n{}'.\
-            format(self.name, self.the_date, self.the_time, self.buyer, self.total_usd_cost, self.eth_nft_price,
-                   self.symbol, self.insta_tags)
+        self.insta_caption = '{} has been purchased on {} at {} (UTC).\n\nSeller {} has sold their NFT to {} for ' \
+                             'the price of ${}!\n\nAt the time of purchase, the price of the NFT was {} {} and ' \
+                             'the price of {} was ${}.\n\n{}'.format(self.name, self.the_date, self.the_time,
+                                                                     self.seller, self.buyer, self.total_usd_cost,
+                                                                     self.nft_price, self.symbol, self.symbol,
+                                                                     self.usd_price, self.insta_tags)
 
 
 class _PostFromOpenSeaInstagram:
@@ -109,9 +111,9 @@ class _PostFromOpenSeaInstagram:
                 name = str(asset['name'])
             except TypeError:
                 return False
-            image_url = asset['image_original_url']
+            image_url = asset['image_url']
             seller_address = str(base['seller']['address'])
-            buyer_address = str(asset['owner']['address'])
+            buyer_address = str(base['winner_account']['address'])
             try:
                 seller = str(base['seller']['user']['username'])
                 if seller == 'None':
@@ -119,7 +121,7 @@ class _PostFromOpenSeaInstagram:
             except TypeError:
                 seller = seller_address[0:8]
             try:
-                buyer = str(asset['owner']['user']['username'])
+                buyer = str(base['winner_account']['user']['username'])
                 if buyer == 'None':
                     buyer = buyer_address[0:8]
             except TypeError:
@@ -174,7 +176,7 @@ class _PostFromOpenSeaInstagram:
                 return -1
         img = open(self.file_name, "wb")
         try:
-            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=3)
+            img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=10)
             img.write(img_response.content)
             img.close()
             return True

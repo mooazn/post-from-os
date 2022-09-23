@@ -67,7 +67,9 @@ class _OpenSeaTransactionObject:
                 discord.Embed(title=title, url=self.link,
                               description='{} {} (${})'.format(self.nft_price, self.symbol, self.total_usd_cost) +
                                           '\n' + ('\nRare Traits:' + '\n\n' + trait_desc if trait_desc != '' else '')
-                              + '\nBuyer: [{}]({})'.format(self.buyer, self.buyer_link), color=embed_color)
+                              + '\nSeller: [{}]({})\nBuyer: [{}]({})'.format(self.seller, self.seller_link, self.buyer,
+                                                                             self.buyer_link),
+                              color=embed_color)
             embed.set_author(name='New Purchase!', icon_url=icon_url)
             embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
@@ -212,7 +214,7 @@ class _PostFromOpenSeaDiscord:
                 image_thumbnail_url = asset['image_thumbnail_url']
                 seller_address = str(base['seller']['address'])
                 seller_link = 'https://opensea.io/{}'.format(seller_address)
-                buyer_address = str(asset['owner']['address'])
+                buyer_address = str(base['winner_account']['address'])
                 buyer_link = 'https://opensea.io/{}'.format(buyer_address)
                 usd_price = float(base['payment_token']['usd_price'])
                 link = asset['permalink']
@@ -225,7 +227,7 @@ class _PostFromOpenSeaDiscord:
             except TypeError:
                 seller = seller_address[0:8]
             try:
-                buyer = str(asset['owner']['user']['username'])
+                buyer = str(base['winner_account']['user']['username'])
                 if buyer == 'None':
                     buyer = buyer_address[0:8]
             except TypeError:
