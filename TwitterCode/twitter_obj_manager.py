@@ -35,9 +35,9 @@ ex = ManageFlowObj('Twitter Values .txt', 'True OR False OR Trait DB.json')
 # True OR False OR nft_trait_db.json OR nothing
 
 # example instantiators:
-mfo = ManageFlowObj('twitter_values_humanoids.txt', 'humanoids_trait_db.json')  # will print traits using DB
+mfo = ManageFlowObj('twitter_values_whoops.txt', 'whoopsies_trait_db.json')  # will print traits using DB
 # or
-mfo2 = ManageFlowObj('twitter_values_humanoids.txt', True)  # will print traits using asset endpoint
+mfo2 = ManageFlowObj('twitter_values_whoops.txt', True)  # will print traits using asset endpoint
 # or
-mfo3 = ManageFlowObj('twitter_values_humanoids.txt', False)  # will NOT print traits
-# mfo3 is equivalent to "mfo3 = ManageFlowObj('twitter_values_humanoids.txt')"
+mfo3 = ManageFlowObj('twitter_values_whoops.txt', False)  # will NOT print traits
+# mfo3 is equivalent to "mfo3 = ManageFlowObj('twitter_values_whoops.txt')"
