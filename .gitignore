@@ -4,6 +4,8 @@ AsynchronousTwitterCode/asynchronous_post_humanoids_twitter.py
 AsynchronousTwitterCode/asynchronous_twitter_values_humanoids.txt
 AsynchronousTwitterCode/asynchronous_twitter_code_humanoids.py
 AsynchronousTwitterCode/asynchronous_twitter_code_yachts.py
+AsynchronousTwitterCode/asynchronous_post_whoops_twitter.py
+AsynchronousTwitterCode/asynchronous_twitter_values_whoops.txt
 
 DiscordCode/discord_values_yachts.txt
 DiscordCode/discord_values_yachts_real.txt
@@ -35,8 +37,6 @@ TwitterCode/post_bananas_twitter.py
 TwitterCode/post_sirens_twitter.py
 TwitterCode/twitter_values_banana.txt
 TwitterCode/twitter_values_sirens.txt
-TwitterCode/post_whoops_twitter.py
-TwitterCode/twitter_values_whoops.txt
 
 BuildBotsWebApp/website_key.txt
 
