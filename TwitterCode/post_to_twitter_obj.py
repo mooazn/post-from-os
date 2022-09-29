@@ -247,41 +247,6 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             print(e, flush=True)
             return
 
-    def process_via_looks_rare(self):
-        self.looks_rare_api_url += f'&collection={self.contract_address}'
-        looks_rare_request = requests.get(self.looks_rare_api_url)
-        looks_rare_response = looks_rare_request.json()
-        eth_price_params = {
-            'module': 'stats',
-            'action': 'ethprice',
-            'apikey': self.ether_scan_api_key
-        }
-        eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
-        eth_price_base = eth_price_req.json()['result']
-        eth_usd_price = eth_price_base['ethusd']
-        for i in looks_rare_response['data']:
-            tx_hash = i['hash']
-            order = i['order']
-            token_id = order['tokenId']
-            # db stuff...
-            nft_other_currency_price = order['price']
-            currency_address = order['currencyAddress']
-            if str(currency_address).lower() == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':
-                symbol = 'WETH'
-                price = int(nft_other_currency_price) / 1e18
-                usd_nft_cost = round(float(eth_usd_price) * price, 2)
-                print(symbol, price, '$', usd_nft_cost)
-            else:
-                token_info_req = requests.get('https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.
-                                              format(currency_address), timeout=3)
-                token_info_json = token_info_req.json()
-                symbol = token_info_json['symbol']
-                decimals = int(token_info_json['decimals'])
-                price = round(token_info_json['price']['rate'], 3)
-                tx_value = int(nft_other_currency_price) / (1 * 10 ** decimals)
-                usd_nft_cost = round(float(price) * tx_value, 2)
-                print(symbol, price, '$', usd_nft_cost)
-
     def process_via_ether_scan(self):
         try:
             eth_price_params = {
@@ -556,33 +521,22 @@ class ManageFlowObj:  # Main class which does all of the operations
             new_post_exists = self.__base_obj.process_via_ether_scan()
             if new_post_exists == -1:
                 print('Error processing via Ether Scan API at roughly', date_time_now, flush=True)
-                time.sleep(30)
+                time.sleep(30)  # 30
             elif new_post_exists:
                 image_downloaded = self.__base_obj.download_image()
                 if image_downloaded:
                     self.try_to_post_to_twitter(date_time_now)
                 else:
                     print('Downloading image error at roughly', date_time_now, flush=True)
-                    time.sleep(10)
+                    time.sleep(10)  # 10
             else:
-                # TODO: Time between pinging API (kept this off the shelf for too long):
+                # TODO: Time between pinging API:
                 #   Find a way to increase the time to sleep based on how many transactions have been occurring
                 #   More posts happening? keep checking every few seconds or decrease if time awaited is higher
                 #   Less posts happening? space out the time we send each request.
-                #   First thought:
-                #       use one whole day to get the average number of posts per hour
-                #       i.e. 2, 1, 6, 4, 1, 1, 5, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 2, 2, 3, 1, 0, 0, 1 - avg: 1.75 ~= 2
-                #       roughly 2 posts per hour based on the above data set (total 33 posts in the first day)
-                #       keep track of the posts per day for the next day
-                #       for each hour after the first day, check how many posts have occurred.
-                #           diff = posts_this_hour - avg
-                #           if diff higher than avg:
-                #               decrease time by (diff * (avg / 30)) seconds
-                #           else:
-                #               increase time by ((avg - posts_this_hour) * (((avg / 5) / posts_this_hour)) + 1) seconds
-                #       update avg based on the posts today
+                #   Implement exponential backoff mechanism...
                 print('No new post at roughly', date_time_now, flush=True)
-                time.sleep(5)
+                time.sleep(5)  # 5
 
     def check_if_new_post_exists(self, date_time_now):
         new_post_exists = self.__base_obj.parse_response_objects()
@@ -590,7 +544,7 @@ class ManageFlowObj:  # Main class which does all of the operations
             self.try_to_download_image(date_time_now)
         else:
             print('No new post at roughly', date_time_now, flush=True)
-            time.sleep(5)
+            time.sleep(5)  # 5
 
     def try_to_download_image(self, date_time_now):
         image_downloaded = self.__base_obj.download_image()
@@ -598,16 +552,16 @@ class ManageFlowObj:  # Main class which does all of the operations
             self.try_to_post_to_twitter(date_time_now)
         else:
             print('Downloading image error at roughly', date_time_now, flush=True)
-            time.sleep(10)
+            time.sleep(10)  # 10
 
     def try_to_post_to_twitter(self, date_time_now):
         posted_to_twitter = self.__base_obj.post_to_twitter()
         if posted_to_twitter:
             print('Posted to Twitter at roughly', date_time_now, flush=True)
-            time.sleep(5)
+            time.sleep(5)  # 5
         else:
             print('Post to Twitter error at roughly', date_time_now, flush=True)
-            time.sleep(15)
+            time.sleep(15)  # 15
 
     def _begin(self):  # begin program!
         while True:

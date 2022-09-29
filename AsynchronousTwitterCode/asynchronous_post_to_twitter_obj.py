@@ -1,11 +1,14 @@
-import datetime
-from fake_useragent import UserAgent
-from operator import itemgetter
-import requests
-from requests.structures import CaseInsensitiveDict
-import time
-from tinydb import TinyDB, Query
-from twython import Twython
+import sys
+sys.path.append('../')
+from HelperCode import fetch_coin  # noqa: E402
+import datetime  # noqa: E402
+from fake_useragent import UserAgent  # noqa: E402
+from operator import itemgetter  # noqa: E402
+import requests  # noqa: E402
+from requests.structures import CaseInsensitiveDict  # noqa: E402
+import time  # noqa: E402
+from tinydb import TinyDB, Query  # noqa: E402
+from twython import Twython  # noqa: E402
 
 
 class _OpenSeaTransactionObject:
@@ -151,6 +154,7 @@ class _PostFromOpenSeaTwitter:
                 tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                 if tx_exists:
                     continue
+                # fetch_coin
                 decimals = int(base['payment_token']['decimals'])
                 symbol = base['payment_token']['symbol']
                 nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
@@ -305,6 +309,7 @@ class _PostFromOpenSeaTwitter:
                         data = first_log['data']
                         if data != '0x':
                             address = first_log['address']
+                            # fetch_coin
                             if address == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2':  # WETH is common, no API needed
                                 symbol = 'WETH'
                                 tx_value = float(int(data, 16) / 1e18)
