@@ -38,6 +38,9 @@ TwitterCode/post_sirens_twitter.py
 TwitterCode/twitter_values_banana.txt
 TwitterCode/twitter_values_sirens.txt
 
+Logs/LogFiles/sirens-of-the-sea_log_file.txt
+Logs/LogFiles/sirens-of-the-sea_old_log_file.txt
+
 BuildBotsWebApp/website_key.txt
 
 AndroidApp/.gradle
