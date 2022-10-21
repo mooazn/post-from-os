@@ -11,17 +11,12 @@ import signal
 
 class LoggerLevels(Enum):
     INFO = 'LOGGER_LEVEL_INFO'
-    WARN = 'LOGGER_LEVEL_WARN'
     ERROR = 'LOGGER_LEVEL_ERROR'
     FATAL = 'LOGGER_LEVEL_FATAL'
 
 
 def info():
     return LoggerLevels.INFO.value
-
-
-def warn():
-    return LoggerLevels.WARN.value
 
 
 def error():
@@ -44,6 +39,7 @@ class Logger:
         self.__log_ending_temp = '_temp_log_file.txt'
         self.__log_file_name = ''
         self.__log_file_short_name = ''
+        self.__log_file_path = ''
         self._init_log_file()
         self.__file = self._open_log_file()
         self.write_log(info(), 'Successfully created log file!')
@@ -51,6 +47,7 @@ class Logger:
     def _init_log_file(self):
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory)
+        self.__log_file_path = os.getcwd() + '/' + self.__log_file_directory
         files = []
         for file in listdir(self.__log_file_directory):
             cur_file = join(self.__log_file_directory, file)
@@ -70,9 +67,16 @@ class Logger:
             rand_int = randint(1000000, 9999999)
         self.__log_file_name += str(rand_int) + self.__log_ending_temp
         self.__log_file_short_name = str(rand_int)
+        self.__log_file_path += '/' + self.__log_file_name
 
     def file_name(self):
         return self.__log_file_name
+
+    def short_file_name(self):
+        return self.__log_file_short_name
+
+    def file_path(self):
+        return self.__log_file_path
 
     def _open_log_file(self):
         cur_dir = os.getcwd()
@@ -84,7 +88,7 @@ class Logger:
         except FileNotFoundError:  # ignore this because duplicate errors in console
             pass
         except OSError:
-            raise Exception(f'Error writing to {self.__log_file_name}')
+            raise Exception(f'Error opening to {self.__log_file_name}')
         file = open(log_file_path, 'a')
         os.chdir(cur_dir)
         return file
@@ -96,9 +100,10 @@ class Logger:
         return not self.__file.closed
 
     def _handler(self, *args):
-        _ = args  # unused, just wanted to get rid of the annoying message. required for handler method header
+        _ = args
         self._close_log_file()
         self._change_file_state(self.__log_file_short_name)
+        # send_mail
         exit(1)
 
     def _exit_at_close(self):
@@ -106,10 +111,11 @@ class Logger:
             if type(self.__file) != str and self.is_open():
                 self._close_log_file()
                 self._change_file_state(self.__log_file_short_name)
+                # send_mail
         except AttributeError:
             pass
 
-    def _change_file_state(self, to_name):
+    def _change_file_state(self, to_name: str):
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory + '/' + self.__log_file_directory)
         current_log_file_exists = False
@@ -124,17 +130,17 @@ class Logger:
             # and the current log file also exists, add an extra line to the end of the old log file to signify
             # that it won't be written to anymore
             with open(to_name + self.__log_ending_old, 'a') as old_file:
-                old_file.write('!!!Changing the state of this log file. New logs will no longer be written!!!')
+                old_file.write('!!The state of this log file has been changed. New logs will no longer be written!!\n')
         os.chdir(cur_dir)
 
     def write_log(self, logger_level: LoggerLevels, logger_message: str):
         if self.is_open():
-            date_and_time = datetime.now().strftime("%m-%d-%Y %H:%M:%S")
+            date_and_time = datetime.now().strftime('%m-%d-%Y %H:%M:%S')
             self.__file.write(f'DateTime - [{date_and_time}] :: LoggerLevel - {logger_level} :: LoggerMessage - '
                               f'{logger_message}\n')
+            self.__file.flush()
 
-    def rename_log_file(self, to_name):
-        self.write_log(info(), 'Renaming the log file...')
+    def rename_log_file(self, to_name: str):
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory + '/' + self.__log_file_directory)
         new_file_name = to_name + self.__log_ending_temp
@@ -142,4 +148,5 @@ class Logger:
         os.chdir(cur_dir)
         self.__log_file_name = new_file_name
         self.__log_file_short_name = to_name
+        self.__log_file_path = '/'.join(self.__log_file_path.split('/')[0:-1]) + '/' + new_file_name
         self.write_log(info(), 'Renamed the log file successfully.')
