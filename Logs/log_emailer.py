@@ -1,17 +1,13 @@
-from datetime import datetime, timedelta, time as t
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email.mime.text import MIMEText
-from email.utils import formatdate
-from email import encoders
-import os
-from itertools import islice
-from os import listdir
-from os.path import isfile, join
-from pathlib import Path
-import smtplib
-import ssl
-import time
+import sys
+sys.path.append('../')
+from datetime import datetime, timedelta, time as t  # noqa: E402
+from log_utils import send_mail  # noqa: E402
+import os  # noqa: E402
+from os import listdir  # noqa: E402
+from os.path import isfile, join  # noqa: E402
+import smtplib  # noqa: E402
+import ssl  # noqa: E402
+import time  # noqa: E402
 
 
 class _LogEmailer:
@@ -24,7 +20,7 @@ class _LogEmailer:
         self.__smtp_server = 'smtp.gmail.com'
         self.__port = 587
         self._parse_log_email_creds_file()
-        self._cleanup_logs_and_send_email()
+        self._cleanup_logs_and_send_emails()
 
     def _parse_log_email_creds_file(self):
         if not os.path.exists(os.getcwd() + '/' + self.__log_email_creds_file):
@@ -43,7 +39,7 @@ class _LogEmailer:
                 except Exception as e:
                     raise Exception(f'The supplied credentials are invalid. {e}')
 
-    def _cleanup_logs_and_send_email(self):
+    def _cleanup_logs_and_send_emails(self):
         path = os.getcwd() + '/' + self.__log_file_directory
         while True:
             now = datetime.now()
@@ -56,69 +52,6 @@ class _LogEmailer:
             for file in files:
                 with open(join(path, file), 'r+') as log_file:
                     log_file.truncate(0)
-
-
-def send_mail(sender, password, receiver, smtp_server, port, files):  # TODO: make this use Google Drive
-    for path in files:
-        file_size = os.path.getsize(path) / 1e6
-        file_paths = []
-        multiple_files = False
-        if file_size > 20:
-            file_paths = split_files_by_size(path, file_size)
-            multiple_files = True
-        else:
-            file_paths.append(path)
-        for file_path in file_paths:
-            msg = MIMEMultipart()
-            msg['From'] = sender
-            msg['To'] = receiver
-            msg['Date'] = formatdate(localtime=True)
-            msg['Subject'] = f"\'{path.split('/')[-1]}\' log file group for " \
-                             f"{(datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')}. " \
-                             f'Group consists of {len(file_paths)} file(s).'
-            msg.attach(MIMEText(f"Log file for \'{file_path.split('/')[-1]}\'"
-                                f'\nFile Size: {os.path.getsize(file_path) / 1e6} MB'))
-            part = MIMEBase('application', 'octet-stream')
-            with open(file_path, 'rb') as cur_file:
-                part.set_payload(cur_file.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', 'attachment; filename={}'.format(Path(file_path).name))
-            msg.attach(part)
-
-            with smtplib.SMTP(smtp_server, port) as server:
-                server.starttls(context=ssl.create_default_context())
-                server.login(sender, password)
-                server.sendmail(sender, receiver, msg.as_string())
-                server.quit()
-
-        if multiple_files:
-            for file_path in file_paths:
-                os.remove(file_path)
-
-
-def split_files_by_size(path, size):  # this is probably very inefficient
-    num_files_needed = int(round(size / 20, 2)) + 1
-    new_file_paths = []
-    with open(path, 'r') as ofp:
-        for file in range(0, num_files_needed):
-            cur_new_file_path = path[0:len(path) - 4] + f'_split_file_{file + 1}.txt'
-            with open(cur_new_file_path, 'w') as cnf:
-                new_file_paths.append(cur_new_file_path)
-                cur_new_file_size = os.path.getsize(cur_new_file_path) / 1e6
-                while cur_new_file_size < 20:
-                    next_lines = list(islice(ofp, 999))
-                    if not next_lines:
-                        break
-                    for line in next_lines:
-                        cnf.write(line)
-                    cur_new_file_size = os.path.getsize(cur_new_file_path) / 1e6
-        if ofp.readline() != '':
-            last_file = path[0:len(path) - 4] + f'_split_file_last.txt'
-            with open(last_file, 'w') as cnf:
-                new_file_paths.append(last_file)
-                for line in ofp:
-                    cnf.write(line)
-    return new_file_paths
 
 
 le = _LogEmailer()
