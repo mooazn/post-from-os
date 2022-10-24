@@ -52,7 +52,7 @@ class _LogReceiver:
             with MailBox(self.__smtp_server).login(self.__from, self.__password) as mailbox:
                 log_file_info = []
                 for msg in mailbox.fetch():
-                    if msg.from_ == self.__received_from:
+                    if msg.from_ == self.__received_from and msg.date.day == datetime.now().day:
                         num_info = 0
                         num_error = 0
                         num_fatal = 0
