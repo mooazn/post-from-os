@@ -71,7 +71,8 @@ class _OpenSeaTransactionObject:
                                                                              self.buyer_link),
                               color=embed_color)
             embed.set_author(name='New Purchase!', icon_url=icon_url)
-            embed.set_image(url=self.image_url)
+            if self.image_url is not None:
+                embed.set_image(url=self.image_url)
         elif self.tx_type == EventType.LISTING.value:
             embed = \
                 discord.Embed(title=self.name, url=self.link,
@@ -176,7 +177,13 @@ class _PostFromOpenSeaDiscord:
                     tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                     if tx_exists:
                         continue
-                    image_url = bundle['asset_contract']['collection']['featured_image_url']
+                    image_url = None
+                    if bundle['asset_contract'] is not None:
+                        try:
+                            _ = bundle['asset_contract']['collection']
+                            image_url = bundle['asset_contract']['collection']['featured_image_url']
+                        except KeyError:
+                            image_url = None
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
                     nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
@@ -427,13 +434,14 @@ async def custom_command_2(message, values, contract_address):
             return
         asset_name = asset_base['name']
         asset_img_url = asset_base['image_url']
-        asset_owner = asset_base['owner']['address']
-        asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
         asset_link = asset_base['permalink']
         embed_color = discord.Color.from_rgb(rgb[0], rgb[1], rgb[2])
         asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
         asset_embed.set_image(url=asset_img_url)
-        asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
+        if asset_base['owner'] is not None:
+            asset_owner = asset_base['owner']['address']
+            asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
+            asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
         await message.channel.send(embed=asset_embed)
     except Exception as e:
         print(e, flush=True)
