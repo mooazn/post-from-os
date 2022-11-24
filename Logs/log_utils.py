@@ -13,6 +13,7 @@ import ssl
 
 def send_mail(sender, password, receiver, smtp_server, port, files=None, subject=None, body=None):
     # TODO: make this use Google Drive
+    err = False
     if files is None:
         msg = MIMEMultipart()
         msg['From'] = sender
@@ -24,19 +25,26 @@ def send_mail(sender, password, receiver, smtp_server, port, files=None, subject
             body = 'Log Report Summary'
         msg['Subject'] = subject
         msg.attach(MIMEText(body))
-        with smtplib.SMTP(smtp_server, port) as server:
-            server.starttls(context=ssl.create_default_context())
-            server.login(sender, password)
-            server.sendmail(sender, receiver, msg.as_string())
-            server.quit()
+        try:
+            with smtplib.SMTP(smtp_server, port) as server:
+                server.starttls(context=ssl.create_default_context())
+                server.login(sender, password)
+                server.sendmail(sender, receiver, msg.as_string())
+                server.quit()
+        except Exception as e:
+            print(e)
+            err = True
+            return err
     else:
         for path in files:
             if not os.path.isabs(path):
-                raise Exception('All paths passed to send_mail as a \'files\' parameter must be absolute paths.')
+                print('All paths passed to send_mail as a \'files\' parameter must be absolute paths.')
+                err = True
+                return err
             file_size = os.path.getsize(path) / 1e6
             file_paths = []
             multiple_files = False
-            if file_size > 20:
+            if file_size >= 20:  # size in MB
                 file_paths = _split_files_by_size(path, file_size)
                 multiple_files = True
             else:
@@ -59,16 +67,20 @@ def send_mail(sender, password, receiver, smtp_server, port, files=None, subject
                 encoders.encode_base64(part)
                 part.add_header('Content-Disposition', 'attachment; filename={}'.format(Path(file_path).name))
                 msg.attach(part)
-
-                with smtplib.SMTP(smtp_server, port) as server:
-                    server.starttls(context=ssl.create_default_context())
-                    server.login(sender, password)
-                    server.sendmail(sender, receiver, msg.as_string())
-                    server.quit()
-
+                try:
+                    with smtplib.SMTP(smtp_server, port) as server:
+                        server.starttls(context=ssl.create_default_context())
+                        server.login(sender, password)
+                        server.sendmail(sender, receiver, msg.as_string())
+                        server.quit()
+                except Exception as e:
+                    print(e)
+                    err = True
+                    return err
             if multiple_files:
                 for file_path in file_paths:
                     os.remove(file_path)
+    return err
 
 
 def _split_files_by_size(path, size):  # this is probably very inefficient

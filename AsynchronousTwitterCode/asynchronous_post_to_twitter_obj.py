@@ -128,7 +128,7 @@ class _PostFromOpenSeaTwitter:
                     if tx_exists:
                         continue
                     bundle = base['asset_bundle']
-                    image_url = None
+                    image_url = bundle['asset_contract']['image_url']
                     if bundle['asset_contract'] is not None:
                         try:
                             _ = bundle['asset_contract']['collection']

@@ -61,16 +61,20 @@ class _LogReceiver:
                                 f.write(att.payload)
                             with open(self.__temp_storage, 'r') as f:
                                 for line in f:
-                                    cur_log_split = line.split('::')
-                                    # cur_log_datetime = cur_log_split[0]
-                                    cur_log_logger_level = cur_log_split[1]
-                                    # cur_log_logger_message = cur_log_split[2]
-                                    if 'LOGGER_LEVEL_INFO' in cur_log_logger_level:
-                                        num_info += 1
-                                    elif 'LOGGER_LEVEL_ERROR' in cur_log_logger_level:
-                                        num_error += 1
-                                    elif 'LOGGER_LEVEL_FATAL' in cur_log_logger_level:
-                                        num_fatal += 1
+                                    if len(line.strip()) != 0 and line.startswith('DateTime -'):
+                                        try:
+                                            cur_log_split = line.split('::')
+                                            # cur_log_datetime = cur_log_split[0]
+                                            cur_log_logger_level = cur_log_split[1]
+                                            # cur_log_logger_message = cur_log_split[2]
+                                            if 'LOGGER_LEVEL_INFO' in cur_log_logger_level:
+                                                num_info += 1
+                                            elif 'LOGGER_LEVEL_ERROR' in cur_log_logger_level:
+                                                num_error += 1
+                                            elif 'LOGGER_LEVEL_FATAL' in cur_log_logger_level:
+                                                num_fatal += 1
+                                        except IndexError:
+                                            continue
                                 log_file_info.append([f'{msg.subject}: {att.filename}', num_info, num_error, num_fatal])
             self._write_summary_and_send_report(log_file_info)
 

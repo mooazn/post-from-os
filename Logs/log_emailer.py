@@ -19,6 +19,7 @@ class _LogEmailer:
         self.__to = ''
         self.__smtp_server = 'smtp.gmail.com'
         self.__port = 587
+        self.__email_sent = False
         self._parse_log_email_creds_file()
         self._cleanup_logs_and_send_emails()
 
@@ -48,10 +49,15 @@ class _LogEmailer:
             print(f"Time right now: {datetime.now().strftime('%m-%d-%Y %H:%M:%S')}.\nTime until 12 AM: {seconds_left}")
             time.sleep(seconds_left)
             files = [join(path, f) for f in listdir(path) if isfile(join(path, f)) and 'temp' in join(path, f)]
-            send_mail(self.__from, self.__password, self.__to, self.__smtp_server, self.__port, files)
-            for file in files:
-                with open(join(path, file), 'r+') as log_file:
-                    log_file.truncate(0)
+            err = send_mail(self.__from, self.__password, self.__to, self.__smtp_server, self.__port, files)
+            if err:
+                self.__email_sent = False
+                return
+            else:
+                self.__email_sent = True
+                for file in files:
+                    with open(join(path, file), 'r+') as log_file:
+                        log_file.truncate(0)
 
 
 le = _LogEmailer()

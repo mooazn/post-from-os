@@ -59,7 +59,7 @@ class _OpenSeaTransactionObject:
         trait_desc = ''
         if self.rare_trait_list:
             for trait in self.rare_trait_list:
-                trait_desc += trait[0] + ': ' + trait[1] + ' - ' + str(trait[2]) + '%' + '\n'
+                trait_desc += str(trait[0]) + ': ' + str(trait[1]) + ' - ' + str(trait[2]) + '%' + '\n'
         if self.num_of_assets > 1:
             title = str(self.num_of_assets) + ' assets bought'
         if self.tx_type == EventType.SALE.value:
@@ -177,13 +177,7 @@ class _PostFromOpenSeaDiscord:
                     tx_exists = False if len(self.tx_db.search(self.tx_query.tx == key)) == 0 else True
                     if tx_exists:
                         continue
-                    image_url = None
-                    if bundle['asset_contract'] is not None:
-                        try:
-                            _ = bundle['asset_contract']['collection']
-                            image_url = bundle['asset_contract']['collection']['featured_image_url']
-                        except KeyError:
-                            image_url = None
+                    image_url = bundle['asset_contract']['image_url']
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
                     nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
