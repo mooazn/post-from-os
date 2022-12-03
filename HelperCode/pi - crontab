@@ -1,0 +1,3 @@
+For Raspberry Pi
+
+@reboot sleep 60; /home/pi/start.sh >> /home/pi/output.txt 2>&1
