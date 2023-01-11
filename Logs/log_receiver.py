@@ -44,15 +44,18 @@ class _LogReceiver:
 
     def _read_emails_and_create_report(self):  # very basic for now
         while True:
-            now = datetime.now()
-            tomorrow = now + timedelta(days=1)
-            seconds_left = (datetime.combine(tomorrow, t(1)) - now).total_seconds()
-            print(f"Time right now: {datetime.now().strftime('%m-%d-%Y %H:%M:%S')}.\nTime until 1 AM: {seconds_left}")
+            today = datetime.now()
+            tomorrow = today + timedelta(days=1)
+            seconds_left = (datetime.combine(tomorrow, t(1)) - today).total_seconds()
+            print(f"Time right now: {datetime.now().strftime('%m-%d-%Y %H:%M:%S')}.\nTime until 1 AM: {seconds_left}",
+                  flush=True)
             time.sleep(seconds_left)
             with MailBox(self.__smtp_server).login(self.__from, self.__password) as mailbox:
                 log_file_info = []
                 for msg in mailbox.fetch():
-                    if msg.from_ == self.__received_from and msg.date.day == datetime.now().day:
+                    if msg.from_ == self.__received_from and msg.date.day == today.day and \
+                            msg.date.month == today.month and \
+                            (msg.date.year == today.year or msg.date.year == today.year - 1):
                         num_info = 0
                         num_error = 0
                         num_fatal = 0

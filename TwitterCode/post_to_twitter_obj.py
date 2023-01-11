@@ -3,6 +3,7 @@ sys.path.append('../')
 import datetime  # noqa: E402
 from fake_useragent import UserAgent  # noqa: E402
 from HelperCode import find_file  # noqa: E402
+from Logs.logger import Logger, info, error, fatal  # noqa: E402
 from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
@@ -14,7 +15,9 @@ import twython.exceptions  # noqa: E402
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
     def __init__(self, name_, image_url_, nft_price_, total_usd_cost_, link_, rare_trait_list_, twitter_tags_,
-                 num_of_assets_, key_, tx_hash_, symbol_):
+                 num_of_assets_, key_, tx_hash_, symbol_, logger, logger_junk):
+        self.LOGGER = logger
+        self.LOGGER_JUNK = logger_junk
         self.twitter_caption = None
         self.name = name_
         self.image_url = image_url_
@@ -28,6 +31,7 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
         self.key = key_
         self.tx_hash = tx_hash_
         self.symbol = symbol_
+        self.LOGGER_JUNK.write_log(info(), 'Successfully created an OpenSea transaction object.')
 
     def __eq__(self, other):
         return self.key == other.key
@@ -53,17 +57,22 @@ class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds in
                         break
                     full_rare_trait_sentence += next_rare_trait_sentence
                 self.twitter_caption += full_rare_trait_sentence
-        self.twitter_caption += '\n\n' + self.link + '\n\n' + \
-                                (self.twitter_tags if self.twitter_tags != 'None' else '')
         # link length and tags length are already accounted for!
+        self.twitter_caption += '\n\n' + self.link + '\n\n' + (self.twitter_tags if self.twitter_tags != 'None' else '')
+        self.LOGGER_JUNK.write_log(info(), f'Successfully created a Twitter caption = {self.twitter_caption.strip()}')
 
 
 class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes both OpenSea API and Twitter API
-    def __init__(self, address, supply, values_file, trait_db_name, image_db_name):  # initialize all the fields
+    def __init__(self, address, supply, values_file, trait_db_name, image_db_name, logger, logger_junk):
+        self.LOGGER = logger
+        self.LOGGER_JUNK = logger_junk
         twitter_values_file = values_file
         values = open(twitter_values_file, 'r')
         self.twitter_tags = values.readline().strip()
         self.collection_name = values.readline().strip()
+        self.LOGGER.write_log(info(), 'Inside of __init__ function in _PostFromOpenSeaTwitter in '
+                                      'post_to_twitter_obj.py. Creating a base object for the '
+                                      f'\'{self.collection_name}\' collection...')
         twitter_api_key = values.readline().strip()
         twitter_api_key_secret = values.readline().strip()
         twitter_access_token = values.readline().strip()
@@ -106,9 +115,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             twitter_access_token_secret
         )
         self.ua = UserAgent()
+        self.LOGGER.write_log(info(), f'Successfully created a base object for the \'{self.collection_name}\' '
+                                      f'collection...')
 
     def __del__(self):
         self.twitter.client.close()
+        self.LOGGER.write_log(info(), 'Twitter client has been closed. Cannot post to Twitter anymore.')
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         try:
@@ -121,10 +133,12 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             headers['Accept'] = 'application/json'
             headers['User-Agent'] = self.ua.random
             headers['x-api-key'] = self.os_api_key
+            self.LOGGER_JUNK.write_log(info(), f'Sending a request to OpenSea at {self.os_events_url} with '
+                                               f'params = {query_strings} and headers = {headers}')
             self.response = requests.get(self.os_events_url, headers=headers, params=query_strings, timeout=3)
             return self.response.status_code == 200
         except Exception as e:
-            print(e, flush=True)
+            self.LOGGER.write_log(error(), f'Encountered Exception inside of get_recent sales: {e}.')
             return False
 
     def parse_response_objects(self):  # parses {limit} objects
@@ -132,7 +146,9 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             try:
                 try:
                     base = self.response.json()['asset_events'][i]
-                except IndexError:
+                except IndexError as ie:
+                    self.LOGGER.write_log(error(), f'Encountered IndexError at iteration {i}: {ie} Here is how the '
+                                                   f"response looks = {self.response.json()['asset_events']}")
                     continue
                 tx_hash = str(base['transaction']['transaction_hash'])
                 key = tx_hash
@@ -141,7 +157,7 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     if tx_exists:
                         continue
                     bundle = base['asset_bundle']
-                    image_url = bundle['asset_contract']['collection']['large_image_url']
+                    image_url = bundle['asset_contract']['image_url']
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
                     nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))
@@ -150,15 +166,22 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     link = bundle['permalink']
                     name = bundle['name']
                     num_of_assets = len(bundle['assets'])
+                    self.LOGGER_JUNK.write_log(info(), 'A unique bundle sale has been found. Creating '
+                                                       'transaction object...')
                     transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link, [],
-                                                            self.twitter_tags, num_of_assets, key, tx_hash, symbol)
+                                                            self.twitter_tags, num_of_assets, key, tx_hash, symbol,
+                                                            self.LOGGER, self.LOGGER_JUNK)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
+                    self.LOGGER_JUNK.write_log(info(), 'Transaction object created with a Twitter caption and appended '
+                                                       'to the transaction queue.')
                     continue
                 asset = base['asset']
                 name = str(asset['name'])
                 image_url = asset['image_url']
-            except TypeError:
+            except TypeError as te:
+                self.LOGGER.write_log(error(), f'Encountered TypeError at iteration {i}: {te} Here is how the response '
+                                               f"looks = {self.response.json()['asset_events']}")
                 continue
             try:
                 token_id = asset['token_id']
@@ -172,15 +195,24 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 usd_price = float(base['payment_token']['usd_price'])
                 total_usd_cost = '{:.2f}'.format(round(nft_price * usd_price, 2))
                 link = asset['permalink']
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as ve_te:
+                self.LOGGER.write_log(error(), f'Encountered ValueError or TypeError at iteration {i}: {ve_te} '
+                                               f'Here is how "the response looks = '
+                                               f"{self.response.json()['asset_events']}")
                 continue
             rare_trait_list = []
             if self.trait_db is not None or self.trait_db is True:
+                self.LOGGER_JUNK.write_log(info(), 'Traits requested, generating rare trait list for the sale...')
                 rare_trait_list = self.create_rare_trait_list(token_id)
+            self.LOGGER_JUNK.write_log(info(), 'A unique sale has been found found. Creating transaction object...')
             transaction = _OpenSeaTransactionObject(name, image_url, nft_price, total_usd_cost, link,
-                                                    rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol)
+                                                    rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol,
+                                                    self.LOGGER, self.LOGGER_JUNK)
             transaction.create_twitter_caption()
             self.tx_queue.append(transaction)
+            self.LOGGER_JUNK.write_log(info(), 'Transaction object created with a Twitter caption and appended to '
+                                               'the transaction queue.')
+        self.LOGGER_JUNK.write_log(info(), 'Finished iterating through all of the objects in parse_response_objects.')
         return self.process_queue()
 
     def process_queue(self):  # processes the queue thus far
@@ -189,7 +221,10 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 self.tx_db.remove(doc_ids=[first.doc_id])
                 break
         index = 0
+        self.LOGGER_JUNK.write_log(info(), f'Size of tx_queue before removing duplicates: {len(self.tx_queue)}')
         self.tx_queue = list(set(self.tx_queue))  # remove all duplicates (based on transaction hash & token_id)
+        self.LOGGER_JUNK.write_log(info(), f'Size of tx_queue after removing duplicates: {len(self.tx_queue)}')
+        self.LOGGER_JUNK.write_log(info(), f'Size of tx_queue before removing posted objects: {len(self.tx_queue)}')
         while index < len(self.tx_queue):
             cur_os_obj = self.tx_queue[index]  # get current object
             tx_exists = False if len(self.tx_db.search(self.tx_query.tx == str(cur_os_obj.key))) == 0 else True
@@ -197,6 +232,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 self.tx_queue.pop(index)
             else:  # else move the index to the next position, which means current index is good for processing
                 index += 1
+        self.LOGGER_JUNK.write_log(info(), f'Size of tx_queue after removing posted objects: {len(self.tx_queue)}')
+        self.LOGGER_JUNK.write_log(info(), 'Finished processing queue in process_queue.')
         if len(self.tx_queue) == 0:
             return False
         self.os_obj_to_post = self.tx_queue[-1]
@@ -204,16 +241,20 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
     def download_image(self):  # downloads the image to upload
         if self.os_obj_to_post.image_url is None:
+            self.LOGGER_JUNK.write_log(info(), 'Image URL might not have been generated or collected if processed via'
+                                               'Ether Scan. This post will upload without an image.')
             return True
         img = open(self.file_name, 'wb')
         try:
+            self.LOGGER_JUNK.write_log(info(), f'Attempting to download image. Sending request with stream=True...')
             img_response = requests.get(self.os_obj_to_post.image_url, stream=True, timeout=3)
             img.write(img_response.content)
             img.close()
             return True
         except Exception as e:
             img.close()
-            print(e, flush=True)
+            self.LOGGER.write_log(error(), f'Encountered Exception inside of download_image: {e} Here is the image '
+                                           f'url: {self.os_obj_to_post.image_url}')
             return False
 
     def create_rare_trait_list(self, token_id):
@@ -229,10 +270,13 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 asset_headers = CaseInsensitiveDict()
                 asset_headers['User-Agent'] = self.ua.random
                 asset_headers['x-api-key'] = self.os_api_key
+                self.LOGGER_JUNK.write_log(info(), f'Sending a request to OpenSea at {asset_url} with asset_headers = '
+                                                   f'{asset_headers}')
                 asset_response = requests.get(asset_url, headers=asset_headers, timeout=3)
                 if asset_response.status_code == 200:
                     traits = asset_response.json()['traits']
             if traits is None:
+                self.LOGGER_JUNK.write_log(error(), 'Traits could not be generated at this time for the object.')
                 return
             for trait in traits:
                 trait_type = trait['trait_type']
@@ -242,9 +286,10 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 if rarity_decimal <= 0.05:
                     rare_trait_list.append([trait_type, trait_value, round(rarity_decimal * 100, 2)])
             rare_trait_list.sort(key=itemgetter(2))
+            self.LOGGER_JUNK.write_log(info(), f'Rare trait list generated = {rare_trait_list}')
             return rare_trait_list
         except Exception as e:
-            print(e, flush=True)
+            self.LOGGER.write_log(error(), f'Encountered Exception inside of create_rare_trait_list: {e}')
             return
 
     def process_via_ether_scan(self):
@@ -254,6 +299,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 'action': 'ethprice',
                 'apikey': self.ether_scan_api_key
             }
+            self.LOGGER_JUNK.write_log(info(), f'Sending a request to EtherScan at {self.ether_scan_api_url} '
+                                               f'with params = {eth_price_params}')
             eth_price_req = requests.get(self.ether_scan_api_url, params=eth_price_params, timeout=3)
             eth_price_base = eth_price_req.json()['result']
             eth_usd_price = eth_price_base['ethusd']
@@ -268,6 +315,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 'page': 1,
                 'offset': self.ether_scan_limit
             }
+            self.LOGGER_JUNK.write_log(info(), f'Sending a request to EtherScan at {self.ether_scan_api_url} '
+                                               f'with params = {tx_transfer_params}')
             get_tx_transfer_request = requests.get(self.ether_scan_api_url, params=tx_transfer_params, timeout=3)
             tx_response = get_tx_transfer_request.json()
             for i in range(0, self.ether_scan_limit):
@@ -288,6 +337,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                         continue
                 else:  # if we are at the end of the list: fetch the api again, increase offset by 1, and check if same
                     tx_transfer_params['offset'] += 1
+                    self.LOGGER_JUNK.write_log(info(), 'Reached end of the list... Sending a request to EtherScan at '
+                                                       f'{self.ether_scan_api_url} with params = {tx_transfer_params}')
                     get_new_tx_transfer_request = requests.get(self.ether_scan_api_url, params=tx_transfer_params,
                                                                timeout=3)
                     new_tx_response = get_new_tx_transfer_request.json()
@@ -304,6 +355,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     'txhash': tx_hash,
                     'apikey': self.ether_scan_api_key
                 }
+                self.LOGGER_JUNK.write_log(info(), f'Sending a request to EtherScan at {self.ether_scan_api_url} with '
+                                                   f'params = {tx_hash_params}')
                 get_tx_hash_request = requests.get(self.ether_scan_api_url, params=tx_hash_params, timeout=3)
                 tx_details_response_base = get_tx_hash_request.json()['result']
                 tx_hex_value = tx_details_response_base['value']
@@ -319,6 +372,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                             'txhash': tx_hash,
                             'apikey': self.ether_scan_api_key
                         }
+                        self.LOGGER_JUNK.write_log(info(), f'Sending a request to EtherScan at '
+                                                           f'{self.ether_scan_api_url} with params = {tx_hash_params}')
                         get_tx_receipt_request = requests.get(self.ether_scan_api_url, params=tx_hash_params,
                                                               timeout=3)
                         first_log = get_tx_receipt_request.json()['result']['logs'][0]
@@ -333,6 +388,8 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                                 token_info_req = requests.get(
                                     'https://api.ethplorer.io/getTokenInfo/{}?apiKey=freekey'.format(address),
                                     timeout=3)
+                                self.LOGGER_JUNK.write_log(info(), 'Sending a request to ethplorer at '
+                                                                   f'{token_info_req}')
                                 token_info_json = token_info_req.json()
                                 symbol = token_info_json['symbol']
                                 decimals = int(token_info_json['decimals'])
@@ -348,13 +405,18 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                     if self.image_db is not None:
                         asset_from_db = self.image_db.search(self.image_query.id == int(token_id))
                         image_url = asset_from_db[0]['image_url']
+                    self.LOGGER_JUNK.write_log(info(), 'A unique sale has been found found. Creating transaction '
+                                                       'object...')
                     transaction = _OpenSeaTransactionObject(name, image_url, tx_value, usd_nft_cost, asset_link,
-                                                            rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol)
+                                                            rare_trait_list, self.twitter_tags, 1, key, tx_hash, symbol,
+                                                            self.LOGGER, self.LOGGER_JUNK)
                     transaction.create_twitter_caption()
                     self.tx_queue.append(transaction)
+                    self.LOGGER_JUNK.write_log(info(), 'Transaction object created with a Twitter caption and appended '
+                                                       'to the transaction queue.')
             return self.process_queue()
         except Exception as e:
-            print(e, flush=True)
+            self.LOGGER.write_log(error(), f'Encountered Exception inside of process_via_ether_scan: {e}')
             return -1
 
     def post_to_twitter(self):  # uploads to Twitter
@@ -364,9 +426,13 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
                 self.os_obj_to_post.is_posted = True
                 self.tx_db.insert({'tx': self.os_obj_to_post.key})
                 self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+                self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter without image, 2 transaction hashes inserted '
+                                                   f'into the database: {self.os_obj_to_post.key} and '
+                                                   f'{self.os_obj_to_post.tx_hash}')
                 return True
         except Exception as e:
-            print(e, flush=True)
+            self.LOGGER.write_log(error(), 'Encountered Exception inside of post_to_twitter when posting to Twitter '
+                                           f'without an image: {e}')
             return False
         image = open(self.file_name, 'rb')
         try:
@@ -377,10 +443,13 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             self.os_obj_to_post.is_posted = True
             self.tx_db.insert({'tx': self.os_obj_to_post.key})
             self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter with image, 2 transaction hashes inserted into the '
+                                               f'database: {self.os_obj_to_post.key} and {self.os_obj_to_post.tx_hash}')
             return True
         except Exception as e:
+            self.LOGGER.write_log(error(), 'Encountered Exception inside of post_to_twitter when posting to Twitter '
+                                           f'with an image: {e}')
             image.close()
-            print(e, flush=True)
             return False
 
     def delete_twitter_posts(self, count=200):  # deletes twitter posts. 200 max per call
@@ -392,61 +461,91 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
 
 
 class ManageFlowObj:  # Main class which does all of the operations
-    def __init__(self, twitter_values_file, trait_db_name=None, image_db_name=None):
+    def __init__(self, twitter_values_file, logging_enabled=False, trait_db_name=None, image_db_name=None):
+        self.LOGGER = Logger(logging_enabled)
+        self.LOGGER_JUNK = Logger(logging_enabled)
+        self.LOGGER.write_log(info(), 'Inside of __init__ function in ManageFlowObj in post_to_twitter_obj.py.')
         self.twitter_values_file = twitter_values_file
         self.trait_db_name = trait_db_name
         self.image_db_name = image_db_name
+        self.platform = 'twitter'
+        self.log_file_name = ''
+        self.junk_log_file_name = ''
         collection_stats = self.validate_params()
         cont_address = collection_stats[0]
         supply = collection_stats[1]
         self.trait_db_name = collection_stats[2]
         self.image_db_name = collection_stats[3]
         self.__base_obj = _PostFromOpenSeaTwitter(cont_address, supply, self.twitter_values_file, self.trait_db_name,
-                                                  self.image_db_name)
+                                                  self.image_db_name, self.LOGGER, self.LOGGER_JUNK)
         self._begin()
 
     def validate_params(self):
-        print('Beginning validation of Twitter Values File...')
+        self.LOGGER.write_log(info(), 'Beginning validation of Twitter Values file...')
+        self.LOGGER.write_log(info(), 'Checking if the Twitter Values file ends with a .txt file extension...')
         if not str(self.twitter_values_file).lower().endswith('.txt'):
-            raise Exception('Twitter Values must be a .txt file.')
+            invalid_twitter_values_file_extension = 'The Twitter Values file must end with a .txt file extension.'
+            self.LOGGER.write_log(fatal(), invalid_twitter_values_file_extension)
+            raise Exception(invalid_twitter_values_file_extension)
         with open(self.twitter_values_file) as values_file:
+            self.LOGGER.write_log(info(), 'Checking the Twitter Values file for format validation...')
             if len(values_file.readlines()) != 8:
-                raise Exception('The Twitter Values file must be formatted correctly.')
-        print('Number of lines validated.')
+                invalid_twitter_values_format = 'The Twitter Values file must be formatted correctly with the right ' \
+                                                'of lines.'
+                self.LOGGER.write_log(fatal(), invalid_twitter_values_format)
+                raise Exception(invalid_twitter_values_format)
+        self.LOGGER.write_log(info(), 'Number of lines validated.')
         values_file_test = open(self.twitter_values_file, 'r')
         hashtags_test = values_file_test.readline().strip()
         hashtags = 0
         words_in_hash_tag = hashtags_test.split()
+        self.LOGGER.write_log(info(), 'Checking the hashtags in the Twitter Values file...')
         if hashtags_test != 'None':
             if len(hashtags_test) == 0 or hashtags_test.split() == 0:
                 values_file_test.close()
-                raise Exception('Hashtags field is empty.')
+                empty_hashtag_field = 'Hashtags field is empty. \'None\' should be written if no hashtags are needed.'
+                self.LOGGER.write_log(fatal(), empty_hashtag_field)
+                raise Exception(empty_hashtag_field)
             if len(hashtags_test) >= 120:
                 values_file_test.close()
-                raise Exception('Too many characters in hashtags.')
+                hashtag_too_many_chars = 'There are too many characters in the hashtags, maximum of 120 ' \
+                                         '(including spaces and hash sign).'
+                self.LOGGER.write_log(fatal(), hashtag_too_many_chars)
+                raise Exception(hashtag_too_many_chars)
             if len(words_in_hash_tag) > 10:
                 values_file_test.close()
-                raise Exception('Too many hashtags.')
+                too_many_hashtags = 'There are too many hashtags, there can only be a maximum of 10.'
+                self.LOGGER.write_log(fatal(), too_many_hashtags)
+                raise Exception(too_many_hashtags)
             for word in words_in_hash_tag:
                 if word[0] == '#':
                     hashtags += 1
             if hashtags != len(words_in_hash_tag):
                 values_file_test.close()
-                raise Exception('All words must be preceded by a hashtag (#).')
-        print('Hashtags validated...')
+                hashtags_not_preceded_by_hash = 'There were one or more words not preceded by a hashtag (#).'
+                self.LOGGER.write_log(fatal(), hashtags_not_preceded_by_hash)
+                raise Exception(hashtags_not_preceded_by_hash)
+        self.LOGGER.write_log(info(), 'The hashtags field has been validated.')
         collection_name_test = values_file_test.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
         test_response = requests.get(test_collection_name_url)
+        self.LOGGER.write_log(info(), 'Checking if the collection name is a valid collection on OpenSea...')
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             stats_json = collection_json['stats']
             total_supply = int(stats_json['total_supply'])
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
             contract_address = primary_asset_contracts_json['address']
+            self.LOGGER.write_log(info(), 'Collection name has been validated.')
         else:
             values_file_test.close()
-            raise Exception('The provided collection name does not exist.')
-        print('Collection validated...')
+            invalid_collection_name_msg = 'The provided collection name does not exist.'
+            self.LOGGER.write_log(fatal(), invalid_collection_name_msg)
+            raise Exception(invalid_collection_name_msg)
+        self.log_file_name = collection_name_test + self.platform
+        self.junk_log_file_name = collection_name_test + self.platform + '_junk'
+        self.LOGGER.rename_log_file(self.log_file_name)
+        self.LOGGER_JUNK.rename_log_file(self.junk_log_file_name)
         api_key = values_file_test.readline().strip()
         api_key_secret = values_file_test.readline().strip()
         access_token = values_file_test.readline().strip()
@@ -457,113 +556,145 @@ class ManageFlowObj:  # Main class which does all of the operations
             access_token,
             access_token_secret
         )
+        self.LOGGER.write_log(info(), 'Checking if the Twitter credentials are valid...')
         try:
             twitter_test.verify_credentials()
             twitter_test.client.close()
+            self.LOGGER.write_log(info(), 'Twitter credentials have been validated.')
         except twython.exceptions.TwythonAuthError:
             values_file_test.close()
             twitter_test.client.close()
-            raise Exception('Invalid Twitter Keys supplied.')
-        print('Twitter credentials validated...')
+            invalid_twitter_credentials = 'Authentication error. Please recheck the credentials, they are invalid.'
+            self.LOGGER.write_log(fatal(), invalid_twitter_credentials)
+            raise Exception(invalid_twitter_credentials)
         test_os_key = values_file_test.readline().strip()
         test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
         test_os_headers = CaseInsensitiveDict()
         test_os_headers['Accept'] = 'application/json'
         test_os_headers['x-api-key'] = test_os_key
         test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
+        self.LOGGER.write_log(info(), 'Checking if the OpenSea API key is valid...')
         if test_os_response.status_code != 200:
             values_file_test.close()
-            raise Exception('Invalid OpenSea API key supplied.')
-        print('OpenSea Key validated...')
+            invalid_opensea_key = 'Provided OpenSea API key is invalid.'
+            self.LOGGER.write_log(fatal(), invalid_opensea_key)
+            raise Exception(invalid_opensea_key)
+        self.LOGGER.write_log(info(), 'OpenSea API key has been validated.')
         test_ether_scan_values = values_file_test.readline().strip().split()
         test_ether_scan_key = test_ether_scan_values[0]
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
             format(test_ether_scan_key)
         test_ether_scan_response = requests.get(test_ether_scan_url)
+        self.LOGGER.write_log(info(), 'Checking if the Ether Scan API key is valid...')
         if test_ether_scan_response.json()['message'] == 'NOTOK':
-            raise Exception('Invalid Ether Scan key.')
-        print('Ether Scan key validated...')
+            values_file_test.close()
+            invalid_ether_scan_key = 'Provided Ether Scan API key is invalid.'
+            self.LOGGER.write_log(fatal(), invalid_ether_scan_key)
+            raise Exception(invalid_ether_scan_key)
+        self.LOGGER.write_log(info(), 'Ether Scan API key has been validated.')
         values_file_test.close()
-        print('Validation of Twitter Values .txt complete. No errors found...')
+        self.LOGGER.write_log(info(), 'Validation of Twitter Values complete. No errors found.')
         trait_db = self.trait_db_name
+        self.LOGGER.write_log(info(), 'Beginning validation of any additional parameters...')
         if self.trait_db_name is not None and type(self.trait_db_name) != bool:
+            self.LOGGER.write_log(info(), 'Validating the existence of the trait database file...')
             if not str(self.trait_db_name).lower().endswith('.json'):
-                raise Exception('Trait DB must end with a .json file extension.')
+                invalid_trait_db_extension = 'Trait DB must end with a .json file extension.'
+                self.LOGGER.write_log(fatal(), invalid_trait_db_extension)
+                raise Exception(invalid_trait_db_extension)
             trait_db = find_file.find(self.trait_db_name)
             if trait_db is None:
-                raise Exception('Trait DB .json not found. Either type the name correctly or remove the parameter.')
-            print('Validation of Trait DB Name .json complete. No errors found...')
+                trait_db_not_found = 'Trait DB .json not found. Please type the name correctly or remove the parameter.'
+                self.LOGGER.write_log(fatal(), trait_db_not_found)
+                raise Exception(trait_db_not_found)
+            self.LOGGER.write_log(info(), 'Validation of Trait DB Name .json complete. No errors found.')
         else:
-            print('Skipping Trait DB Name .json. No file was provided.')
+            self.LOGGER.write_log(info(), 'Skipping Trait DB Name .json. No file was provided.')
         image_db = self.image_db_name
         if self.image_db_name is not None:
+            self.LOGGER.write_log(info(), 'Validating the existence of the image database file...')
             if not str(self.image_db_name).lower().endswith('.json'):
-                raise Exception('Image DB must end with a .json file extension.')
+                invalid_image_db_extension = 'Image DB must end with a .json file extension.'
+                self.LOGGER.write_log(fatal(), invalid_image_db_extension)
+                raise Exception(invalid_image_db_extension)
             image_db = find_file.find(self.image_db_name)
             if image_db is None:
-                raise Exception('Image DB .json not found. Either type the name correctly or remove the parameter.')
-            print('Validation of Image DB Name .json complete. No errors found...')
+                image_db_not_found = 'Image DB .json not found. Either type the name correctly or remove the parameter.'
+                self.LOGGER.write_log(fatal(), image_db_not_found)
+                raise Exception(image_db_not_found)
+            self.LOGGER.write_log(info(), 'Validation of Image DB Name .json complete. No errors found.')
         else:
-            print('Skipping Image DB Name .json. No file was provided.')
-        print('All files are validated. Beginning program...')
+            self.LOGGER.write_log(info(), 'Skipping Image DB Name .json. No file was provided.')
+        self.LOGGER.write_log(info(), 'Validation of Twitter Values file and any extra parameter(s) is complete.')
         return [contract_address, total_supply, trait_db, image_db]
 
-    def run_methods(self, date_time_now):  # runs all the methods
-        self.check_os_api_status(date_time_now)
+    def run_methods(self):
+        self.check_os_api_status()
 
-    def check_os_api_status(self, date_time_now):
+    def check_os_api_status(self):
         os_api_working = self.__base_obj.get_recent_sales()
         if os_api_working:
-            self.check_if_new_post_exists(date_time_now)
+            self.check_if_new_post_exists()
         else:
-            print('OS API is not working at roughly', date_time_now, flush=True)
-            print('Attempting to use Ether Scan API at roughly', date_time_now, flush=True)
+            time.sleep(10)  # 10
             new_post_exists = self.__base_obj.process_via_ether_scan()
             if new_post_exists == -1:
-                print('Error processing via Ether Scan API at roughly', date_time_now, flush=True)
+                self.LOGGER.write_log(error(), 'Ether Scan API is not working currently either. Sleeping for 30 '
+                                               'seconds...')
                 time.sleep(30)  # 30
             elif new_post_exists:
                 image_downloaded = self.__base_obj.download_image()
                 if image_downloaded:
-                    self.try_to_post_to_twitter(date_time_now)
+                    self.try_to_post_to_twitter()
                 else:
-                    print('Downloading image error at roughly', date_time_now, flush=True)
+                    self.LOGGER.write_log(error(), 'There was an error while downloading the image. Sleeping for '
+                                                   '10 seconds...')
                     time.sleep(10)  # 10
             else:
-                # TODO: Time between pinging API:
-                #   Find a way to increase the time to sleep based on how many transactions have been occurring
-                #   More posts happening? keep checking every few seconds or decrease if time awaited is higher
-                #   Less posts happening? space out the time we send each request.
-                #   Implement exponential backoff mechanism...
-                print('No new post at roughly', date_time_now, flush=True)
+                self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 5 seconds...')
                 time.sleep(5)  # 5
 
-    def check_if_new_post_exists(self, date_time_now):
+    def check_if_new_post_exists(self):
         new_post_exists = self.__base_obj.parse_response_objects()
         if new_post_exists:
-            self.try_to_download_image(date_time_now)
+            self.try_to_download_image()
         else:
-            print('No new post at roughly', date_time_now, flush=True)
+            self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 5 seconds...')
             time.sleep(5)  # 5
 
-    def try_to_download_image(self, date_time_now):
+    def try_to_download_image(self):
         image_downloaded = self.__base_obj.download_image()
         if image_downloaded:
-            self.try_to_post_to_twitter(date_time_now)
+            self.try_to_post_to_twitter()
         else:
-            print('Downloading image error at roughly', date_time_now, flush=True)
+            self.LOGGER.write_log(error(), 'There was an error while downloading the image. Sleeping for 10 seconds...')
             time.sleep(10)  # 10
 
-    def try_to_post_to_twitter(self, date_time_now):
+    def try_to_post_to_twitter(self):
         posted_to_twitter = self.__base_obj.post_to_twitter()
         if posted_to_twitter:
-            print('Posted to Twitter at roughly', date_time_now, flush=True)
+            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter successfully. Sleeping for 5 seconds...')
             time.sleep(5)  # 5
         else:
-            print('Post to Twitter error at roughly', date_time_now, flush=True)
+            self.LOGGER.write_log(error(), 'There was an error while posting to Twitter. Sleeping for 15 seconds...')
             time.sleep(15)  # 15
 
     def _begin(self):  # begin program!
+        self.LOGGER.write_log(info(), 'Beginning the program in ManageFlowObj in post_to_twitter_obj.py...')
+        min_before = time.time()
+        first = True
         while True:
-            date_time_now = datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S')
-            self.run_methods(date_time_now)
+            if first:
+                print(f'Log File Names: {self.log_file_name} {self.junk_log_file_name}')
+            if first or time.time() - min_before >= 60:
+                print('Heartbeat at ' + datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S'),
+                      flush=True)
+                min_before = time.time()
+                first = False
+            self.run_methods()
+
+# TODO: Time between pinging API:
+#   Find a way to increase the time to sleep based on how many transactions have been occurring
+#   More posts happening? keep checking every few seconds or decrease if time awaited is higher
+#   Less posts happening? space out the time we send each request.
+#   Implement exponential backoff mechanism...

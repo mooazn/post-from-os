@@ -129,12 +129,6 @@ class _PostFromOpenSeaTwitter:
                         continue
                     bundle = base['asset_bundle']
                     image_url = bundle['asset_contract']['image_url']
-                    if bundle['asset_contract'] is not None:
-                        try:
-                            _ = bundle['asset_contract']['collection']
-                            image_url = bundle['asset_contract']['collection']['large_image_url']
-                        except KeyError:
-                            image_url = None
                     decimals = int(base['payment_token']['decimals'])
                     symbol = base['payment_token']['symbol']
                     nft_price = float('{0:.5f}'.format(int(base['total_price']) / (1 * 10 ** decimals)))

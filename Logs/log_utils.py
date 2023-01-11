@@ -32,13 +32,13 @@ def send_mail(sender, password, receiver, smtp_server, port, files=None, subject
                 server.sendmail(sender, receiver, msg.as_string())
                 server.quit()
         except Exception as e:
-            print(e)
+            print(e, flush=True)
             err = True
             return err
     else:
         for path in files:
             if not os.path.isabs(path):
-                print('All paths passed to send_mail as a \'files\' parameter must be absolute paths.')
+                print('All paths passed to send_mail as a \'files\' parameter must be absolute paths.', flush=True)
                 err = True
                 return err
             file_size = os.path.getsize(path) / 1e6
@@ -74,7 +74,7 @@ def send_mail(sender, password, receiver, smtp_server, port, files=None, subject
                         server.sendmail(sender, receiver, msg.as_string())
                         server.quit()
                 except Exception as e:
-                    print(e)
+                    print(e, flush=True)
                     err = True
                     return err
             if multiple_files:

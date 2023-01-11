@@ -431,11 +431,14 @@ async def custom_command_2(message, values, contract_address):
         asset_link = asset_base['permalink']
         embed_color = discord.Color.from_rgb(rgb[0], rgb[1], rgb[2])
         asset_embed = discord.Embed(title='{}'.format(asset_name), url=asset_link, color=embed_color)
-        asset_embed.set_image(url=asset_img_url)
+        if asset_img_url is not None:
+            asset_embed.set_image(url=asset_img_url)
+        else:
+            asset_embed.description = 'Failed to fetch content metadata.\n\n'
         if asset_base['owner'] is not None:
             asset_owner = asset_base['owner']['address']
             asset_owner_link = 'https://opensea.io/{}'.format(asset_owner)
-            asset_embed.description = 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
+            asset_embed.description += 'Owner: [{}]({})'.format(asset_owner[0:8], asset_owner_link)
         await message.channel.send(embed=asset_embed)
     except Exception as e:
         print(e, flush=True)

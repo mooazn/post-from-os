@@ -28,7 +28,10 @@ def fatal():
 
 
 class Logger:
-    def __init__(self):
+    def __init__(self, logging_enabled: bool):
+        self.__logging_enabled = logging_enabled
+        if not logging_enabled:
+            return
         signal.signal(signal.SIGINT, self._handler)
         signal.signal(signal.SIGTERM, self._handler)
         atexit.register(self._exit_at_close)
@@ -70,15 +73,23 @@ class Logger:
         self.__log_file_path += '/' + self.__log_file_name
 
     def file_name(self):
+        if not self.__logging_enabled:
+            return None
         return self.__log_file_name
 
     def short_file_name(self):
+        if not self.__logging_enabled:
+            return None
         return self.__log_file_short_name
 
     def file_path(self):
+        if not self.__logging_enabled:
+            return None
         return self.__log_file_path
 
     def _open_log_file(self):
+        if not self.__logging_enabled:
+            return None
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory)
         log_file_path = self.__log_file_directory + '/' + self.__log_file_name
@@ -94,28 +105,40 @@ class Logger:
         return file
 
     def _close_log_file(self):
+        if not self.__logging_enabled:
+            return
         self.__file.close()
 
     def is_open(self):
+        if not self.__logging_enabled:
+            return None
         return not self.__file.closed
 
     def _handler(self, *args):
+        if not self.__logging_enabled:
+            return
         _ = args
         self._close_log_file()
         self._change_file_state(self.__log_file_short_name)
+        self.__logging_enabled = False
         # send_mail
         exit(1)
 
     def _exit_at_close(self):
+        if not self.__logging_enabled:
+            return
         try:
             if type(self.__file) != str and self.is_open():
                 self._close_log_file()
                 self._change_file_state(self.__log_file_short_name)
+                self.__logging_enabled = False
                 # send_mail
         except AttributeError:
             pass
 
     def _change_file_state(self, to_name: str):
+        if not self.__logging_enabled:
+            return
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory + '/' + self.__log_file_directory)
         current_log_file_exists = False
@@ -134,6 +157,8 @@ class Logger:
         os.chdir(cur_dir)
 
     def write_log(self, logger_level: LoggerLevels, logger_message: str):
+        if not self.__logging_enabled:
+            return
         if self.is_open():
             date_and_time = datetime.now().strftime('%m-%d-%Y %H:%M:%S')
             self.__file.write(f'DateTime - [{date_and_time}] :: LoggerLevel - {logger_level} :: LoggerMessage - '
@@ -141,6 +166,8 @@ class Logger:
             self.__file.flush()
 
     def rename_log_file(self, to_name: str):
+        if not self.__logging_enabled:
+            return
         cur_dir = os.getcwd()
         os.chdir(self.__logs_directory + '/' + self.__log_file_directory)
         new_file_name = to_name + self.__log_ending_temp
