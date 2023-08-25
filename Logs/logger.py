@@ -58,13 +58,13 @@ class Logger:
                 files.append(file)
         os.chdir(cur_dir)
         valid_digits = []
-        try:
-            for file_name in files:
-                digit = file_name.split(self.__log_ending)[0]
+        for file_name in files:
+            digit = file_name.split(self.__log_ending)[0]
+            try:
                 int(digit)
-                valid_digits.append(digit)
-        except ValueError:
-            pass
+            except ValueError:
+                continue
+            valid_digits.append(digit)
         rand_int = randint(1000000, 9999999)
         while rand_int in valid_digits:
             rand_int = randint(1000000, 9999999)

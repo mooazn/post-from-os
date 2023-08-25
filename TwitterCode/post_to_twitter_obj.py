@@ -3,14 +3,13 @@ sys.path.append('../')
 import datetime  # noqa: E402
 from fake_useragent import UserAgent  # noqa: E402
 from HelperCode import find_file  # noqa: E402
+from HelperCode.tweet import Tweet  # noqa: E402
 from Logs.logger import Logger, info, error, fatal  # noqa: E402
 from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
 import time  # noqa: E402
 from tinydb import database, Query, TinyDB  # noqa: E402
-from twython import Twython  # noqa: E402
-import twython.exceptions  # noqa: E402
 
 
 class _OpenSeaTransactionObject:  # an OpenSea transaction object which holds information about the object
@@ -68,16 +67,16 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.LOGGER_JUNK = logger_junk
         twitter_values_file = values_file
         values = open(twitter_values_file, 'r')
+        self.os_api_key = values.readline().strip()
         self.twitter_tags = values.readline().strip()
         self.collection_name = values.readline().strip()
         self.LOGGER.write_log(info(), 'Inside of __init__ function in _PostFromOpenSeaTwitter in '
                                       'post_to_twitter_obj.py. Creating a base object for the '
                                       f'\'{self.collection_name}\' collection...')
-        twitter_api_key = values.readline().strip()
-        twitter_api_key_secret = values.readline().strip()
-        twitter_access_token = values.readline().strip()
-        twitter_access_token_secret = values.readline().strip()
-        self.os_api_key = values.readline().strip()
+        self.twitter_api_key = values.readline().strip()
+        self.twitter_api_key_secret = values.readline().strip()
+        self.twitter_access_token = values.readline().strip()
+        self.twitter_access_token_secret = values.readline().strip()
         self.ether_scan_values = values.readline().strip().split()
         values.close()
         self.ether_scan_api_key = self.ether_scan_values[0]
@@ -108,18 +107,14 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
         self.tx_queue = []
         self.os_limit = 10
         self.ether_scan_limit = int(self.os_limit * 1.5)
-        self.twitter = Twython(
-            twitter_api_key,
-            twitter_api_key_secret,
-            twitter_access_token,
-            twitter_access_token_secret
-        )
+        self.tweet = Tweet(self.twitter_api_key, self.twitter_api_key_secret, self.twitter_access_token,
+                           self.twitter_access_token_secret)
         self.ua = UserAgent()
         self.LOGGER.write_log(info(), f'Successfully created a base object for the \'{self.collection_name}\' '
                                       f'collection...')
 
     def __del__(self):
-        self.twitter.client.close()
+        self.tweet.close()
         self.LOGGER.write_log(info(), 'Twitter client has been closed. Cannot post to Twitter anymore.')
 
     def get_recent_sales(self):  # gets {limit} most recent sales
@@ -420,44 +415,32 @@ class _PostFromOpenSeaTwitter:  # class which holds all operations and utilizes 
             return -1
 
     def post_to_twitter(self):  # uploads to Twitter
-        try:
-            if self.os_obj_to_post.image_url is None:
-                self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
-                self.os_obj_to_post.is_posted = True
-                self.tx_db.insert({'tx': self.os_obj_to_post.key})
-                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
-                self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter without image, 2 transaction hashes inserted '
-                                                   f'into the database: {self.os_obj_to_post.key} and '
-                                                   f'{self.os_obj_to_post.tx_hash}')
-                return True
-        except Exception as e:
-            self.LOGGER.write_log(error(), 'Encountered Exception inside of post_to_twitter when posting to Twitter '
-                                           f'without an image: {e}')
-            return False
-        image = open(self.file_name, 'rb')
-        try:
-            response = self.twitter.upload_media(media=image)
-            image.close()
-            media_id = [response['media_id']]
-            self.twitter.update_status(status=self.os_obj_to_post.twitter_caption, media_ids=media_id)
+        if self.os_obj_to_post.image_url is None:
+            res = self.tweet.post(self.os_obj_to_post.twitter_caption)
+            if res == -1:
+                self.LOGGER.write_log(error(),
+                                      'Encountered Exception inside of post_to_twitter when posting to Twitter '
+                                      f'without an image.')
+                return False
             self.os_obj_to_post.is_posted = True
             self.tx_db.insert({'tx': self.os_obj_to_post.key})
             self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
-            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter with image, 2 transaction hashes inserted into the '
-                                               f'database: {self.os_obj_to_post.key} and {self.os_obj_to_post.tx_hash}')
+            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter without image, 2 transaction hashes inserted '
+                                               f'into the database: {self.os_obj_to_post.key} and '
+                                               f'{self.os_obj_to_post.tx_hash}')
             return True
-        except Exception as e:
-            self.LOGGER.write_log(error(), 'Encountered Exception inside of post_to_twitter when posting to Twitter '
-                                           f'with an image: {e}')
-            image.close()
-            return False
 
-    def delete_twitter_posts(self, count=200):  # deletes twitter posts. 200 max per call
-        if count > 200:
+        res = self.tweet.post(self.os_obj_to_post.twitter_caption, self.file_name)
+        if res == -1:
+            self.LOGGER.write_log(error(), 'Encountered Exception inside of post_to_twitter when posting to Twitter '
+                                           f'with an image.')
             return False
-        for i in self.twitter.get_user_timeline(count=count):
-            status = int(i['id_str'])
-            self.twitter.destroy_status(id=status)
+        self.os_obj_to_post.is_posted = True
+        self.tx_db.insert({'tx': self.os_obj_to_post.key})
+        self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+        self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter with image, 2 transaction hashes inserted into the '
+                                           f'database: {self.os_obj_to_post.key} and {self.os_obj_to_post.tx_hash}')
+        return True
 
 
 class ManageFlowObj:  # Main class which does all of the operations
@@ -487,15 +470,29 @@ class ManageFlowObj:  # Main class which does all of the operations
             invalid_twitter_values_file_extension = 'The Twitter Values file must end with a .txt file extension.'
             self.LOGGER.write_log(fatal(), invalid_twitter_values_file_extension)
             raise Exception(invalid_twitter_values_file_extension)
+        self.LOGGER.write_log(info(), 'Twitter Values file extension validated.')
         with open(self.twitter_values_file) as values_file:
-            self.LOGGER.write_log(info(), 'Checking the Twitter Values file for format validation...')
+            self.LOGGER.write_log(info(), 'Checking the Twitter Values file number of lines...')
             if len(values_file.readlines()) != 8:
-                invalid_twitter_values_format = 'The Twitter Values file must be formatted correctly with the right ' \
+                invalid_twitter_values_format = 'The Twitter Values file must be formatted correctly with the right #' \
                                                 'of lines.'
                 self.LOGGER.write_log(fatal(), invalid_twitter_values_format)
                 raise Exception(invalid_twitter_values_format)
-        self.LOGGER.write_log(info(), 'Number of lines validated.')
+        self.LOGGER.write_log(info(), 'Twitter Values file number of lines validated.')
         values_file_test = open(self.twitter_values_file, 'r')
+        test_os_key = values_file_test.readline().strip()
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = test_os_key
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
+        self.LOGGER.write_log(info(), 'Checking if the OpenSea API key is valid...')
+        if test_os_response.status_code != 200:
+            values_file_test.close()
+            invalid_opensea_key = 'Provided OpenSea API key is invalid.'
+            self.LOGGER.write_log(fatal(), invalid_opensea_key)
+            raise Exception(invalid_opensea_key)
+        self.LOGGER.write_log(info(), 'OpenSea API key has been validated.')
         hashtags_test = values_file_test.readline().strip()
         hashtags = 0
         words_in_hash_tag = hashtags_test.split()
@@ -526,9 +523,12 @@ class ManageFlowObj:  # Main class which does all of the operations
                 self.LOGGER.write_log(fatal(), hashtags_not_preceded_by_hash)
                 raise Exception(hashtags_not_preceded_by_hash)
         self.LOGGER.write_log(info(), 'The hashtags field has been validated.')
+        test_coll_headers = CaseInsensitiveDict()
+        test_coll_headers['Accept'] = 'application/json'
+        test_coll_headers['x-api-key'] = test_os_key
         collection_name_test = values_file_test.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.get(test_collection_name_url)
+        test_response = requests.get(test_collection_name_url, headers=test_coll_headers)
         self.LOGGER.write_log(info(), 'Checking if the collection name is a valid collection on OpenSea...')
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
@@ -542,44 +542,23 @@ class ManageFlowObj:  # Main class which does all of the operations
             invalid_collection_name_msg = 'The provided collection name does not exist.'
             self.LOGGER.write_log(fatal(), invalid_collection_name_msg)
             raise Exception(invalid_collection_name_msg)
-        self.log_file_name = collection_name_test + self.platform
-        self.junk_log_file_name = collection_name_test + self.platform + '_junk'
+        self.log_file_name = collection_name_test + '_' + self.platform
+        self.junk_log_file_name = collection_name_test + '_' + self.platform + '_junk'
         self.LOGGER.rename_log_file(self.log_file_name)
         self.LOGGER_JUNK.rename_log_file(self.junk_log_file_name)
         api_key = values_file_test.readline().strip()
         api_key_secret = values_file_test.readline().strip()
         access_token = values_file_test.readline().strip()
         access_token_secret = values_file_test.readline().strip()
-        twitter_test = Twython(
-            api_key,
-            api_key_secret,
-            access_token,
-            access_token_secret
-        )
         self.LOGGER.write_log(info(), 'Checking if the Twitter credentials are valid...')
         try:
-            twitter_test.verify_credentials()
-            twitter_test.client.close()
-            self.LOGGER.write_log(info(), 'Twitter credentials have been validated.')
-        except twython.exceptions.TwythonAuthError:
+            Tweet(api_key, api_key_secret, access_token, access_token_secret)
+        except Exception as e:
             values_file_test.close()
-            twitter_test.client.close()
-            invalid_twitter_credentials = 'Authentication error. Please recheck the credentials, they are invalid.'
+            invalid_twitter_credentials = 'Authentication error. Please recheck the credentials, they are invalid. ' + \
+                                          str(e)
             self.LOGGER.write_log(fatal(), invalid_twitter_credentials)
             raise Exception(invalid_twitter_credentials)
-        test_os_key = values_file_test.readline().strip()
-        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
-        test_os_headers = CaseInsensitiveDict()
-        test_os_headers['Accept'] = 'application/json'
-        test_os_headers['x-api-key'] = test_os_key
-        test_os_response = requests.get(test_os_key_url, headers=test_os_headers)
-        self.LOGGER.write_log(info(), 'Checking if the OpenSea API key is valid...')
-        if test_os_response.status_code != 200:
-            values_file_test.close()
-            invalid_opensea_key = 'Provided OpenSea API key is invalid.'
-            self.LOGGER.write_log(fatal(), invalid_opensea_key)
-            raise Exception(invalid_opensea_key)
-        self.LOGGER.write_log(info(), 'OpenSea API key has been validated.')
         test_ether_scan_values = values_file_test.readline().strip().split()
         test_ether_scan_key = test_ether_scan_values[0]
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
@@ -636,48 +615,48 @@ class ManageFlowObj:  # Main class which does all of the operations
         if os_api_working:
             self.check_if_new_post_exists()
         else:
-            time.sleep(10)  # 10
+            time.sleep(1000)  # 10
             new_post_exists = self.__base_obj.process_via_ether_scan()
             if new_post_exists == -1:
-                self.LOGGER.write_log(error(), 'Ether Scan API is not working currently either. Sleeping for 30 '
+                self.LOGGER.write_log(error(), 'Ether Scan API is not working currently either. Sleeping for 1000'
                                                'seconds...')
-                time.sleep(30)  # 30
+                time.sleep(1000)  # 30
             elif new_post_exists:
                 image_downloaded = self.__base_obj.download_image()
                 if image_downloaded:
                     self.try_to_post_to_twitter()
                 else:
                     self.LOGGER.write_log(error(), 'There was an error while downloading the image. Sleeping for '
-                                                   '10 seconds...')
-                    time.sleep(10)  # 10
+                                                   '1000 seconds...')
+                    time.sleep(1000)  # 10
             else:
-                self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 5 seconds...')
-                time.sleep(5)  # 5
+                self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 1000 seconds...')
+                time.sleep(1000)  # 5
 
     def check_if_new_post_exists(self):
         new_post_exists = self.__base_obj.parse_response_objects()
         if new_post_exists:
             self.try_to_download_image()
         else:
-            self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 5 seconds...')
-            time.sleep(5)  # 5
+            self.LOGGER_JUNK.write_log(info(), 'There is no new post. Sleeping for 1000 seconds...')
+            time.sleep(1000)  # 5
 
     def try_to_download_image(self):
         image_downloaded = self.__base_obj.download_image()
         if image_downloaded:
             self.try_to_post_to_twitter()
         else:
-            self.LOGGER.write_log(error(), 'There was an error while downloading the image. Sleeping for 10 seconds...')
-            time.sleep(10)  # 10
+            self.LOGGER.write_log(error(), 'There was an error while downloading the image. Sleeping for 1000 seconds...')
+            time.sleep(1000)  # 10
 
     def try_to_post_to_twitter(self):
         posted_to_twitter = self.__base_obj.post_to_twitter()
         if posted_to_twitter:
-            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter successfully. Sleeping for 5 seconds...')
-            time.sleep(5)  # 5
+            self.LOGGER_JUNK.write_log(info(), 'Posted to Twitter successfully. Sleeping for 1000 seconds...')
+            time.sleep(1000)  # 5
         else:
-            self.LOGGER.write_log(error(), 'There was an error while posting to Twitter. Sleeping for 15 seconds...')
-            time.sleep(15)  # 15
+            self.LOGGER.write_log(error(), 'There was an error while posting to Twitter. Sleeping for 1000 seconds...')
+            time.sleep(1000)  # 15
 
     def _begin(self):  # begin program!
         self.LOGGER.write_log(info(), 'Beginning the program in ManageFlowObj in post_to_twitter_obj.py...')
@@ -685,7 +664,8 @@ class ManageFlowObj:  # Main class which does all of the operations
         first = True
         while True:
             if first:
-                print(f'Log File Names: {self.log_file_name} {self.junk_log_file_name}')
+                print(f'Log File Names: {self.log_file_name}_temp_log_file.txt '
+                      f'{self.junk_log_file_name}_temp_log_file.txt')
             if first or time.time() - min_before >= 60:
                 print('Heartbeat at ' + datetime.datetime.fromtimestamp(time.time()).strftime('%m/%d/%Y %H:%M:%S'),
                       flush=True)
