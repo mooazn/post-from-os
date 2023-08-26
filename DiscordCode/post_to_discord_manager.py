@@ -44,15 +44,28 @@ class ManageManager:
             raise Exception('Asynchronous code file name must be something other than the default.')
         print('Asynchronous Code File .py validated...')
         test_discord_values = open(self.discord_values, 'r')
+        test_os_api_key = test_discord_values.readline().strip()
+        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
+        test_os_headers = CaseInsensitiveDict()
+        test_os_headers['Accept'] = 'application/json'
+        test_os_headers['x-api-key'] = test_os_api_key
+        test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
+        if test_os_response.status_code != 200:
+            test_discord_values.close()
+            raise Exception('Invalid OpenSea API key supplied.')
+        print('OpenSea Key validated...')
         discord_token = test_discord_values.readline().strip()
         collection_names_test = test_discord_values.readline().split('|')
         if len(collection_names_test) > 5:
             test_discord_values.close()
             raise Exception('Too many collections. Please create a new bot for every 5 collections.')
+        test_coll_headers = CaseInsensitiveDict()
+        test_coll_headers['Accept'] = 'application/json'
+        test_coll_headers['x-api-key'] = test_os_api_key
         for collection_name_test in collection_names_test:
             test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'. \
                 format(collection_name_test.strip())
-            test_response = requests.get(test_collection_name_url, timeout=1.5)
+            test_response = requests.get(test_collection_name_url, headers=test_coll_headers, timeout=1.5)
             if test_response.status_code == 200:
                 collection_json = test_response.json()['collection']
                 primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
@@ -152,18 +165,8 @@ class ManageManager:
             self.values[self.contract_addresses[index]].append([r, g, b])
             index += 1
         print('RGB Values validated...')
-        test_os_api_key = test_discord_values.readline().strip()
-        test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
-        test_os_headers = CaseInsensitiveDict()
-        test_os_headers['Accept'] = 'application/json'
-        test_os_headers['x-api-key'] = test_os_api_key
-        test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=1)
-        if test_os_response.status_code != 200:
-            test_discord_values.close()
-            raise Exception('Invalid OpenSea API key supplied.')
         for i in range(0, index):
             self.values[self.contract_addresses[i]].append(test_os_api_key)
-        print('OpenSea Key validated...')
         test_ether_scan_key = test_discord_values.readline().strip()
         test_ether_scan_url = 'https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={}'. \
             format(test_ether_scan_key)
@@ -245,17 +248,17 @@ class ManageManager:
     while not client.is_closed():
         status = sales_obj.check_os_api_status(EventType.SALE.value)
         if not status:
-            await asyncio.sleep(30)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         exists = sales_obj.check_if_new_post_exists()
         if not exists:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         res = await post_to_discord_obj.try_to_post_embed_to_discord(sales_obj, channel)
         if res:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
         else:
-            await asyncio.sleep(10)
+            await asyncio.sleep(SLEEP_TIME)
             '''
         listings_boiler_plate_code = '''
     await client.wait_until_ready()
@@ -263,22 +266,22 @@ class ManageManager:
     while not client.is_closed():
         status = listings_obj.check_os_api_status(EventType.LISTING.value)
         if not status:
-            await asyncio.sleep(30)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         exists = listings_obj.check_if_new_post_exists()
         if not exists:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         res = await post_to_discord_obj.try_to_post_embed_to_discord(listings_obj, channel)
         if res:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
         else:
-            await asyncio.sleep(10)
+            await asyncio.sleep(SLEEP_TIME)
             '''
         code_file = open(file_name, 'w')
         code_file.write(
             '''import asyncio\nimport post_to_discord_obj\nfrom post_to_discord_obj import EventType, ManageFlowObj
-            \n\n''')
+            \n\nSLEEP_TIME = 300\n''')
         for _ in self.values.items():
             code_file.write('''async def process_sales_{}(client, sales_obj, sales_channel):'''.format(index))
             code_file.write(sales_boiler_plate_code + '\n\n')

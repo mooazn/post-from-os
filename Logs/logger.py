@@ -9,6 +9,9 @@ import shutil
 import signal
 
 
+missed_logs_queue = []
+
+
 class LoggerLevels(Enum):
     INFO = 'LOGGER_LEVEL_INFO'
     ERROR = 'LOGGER_LEVEL_ERROR'
@@ -159,11 +162,25 @@ class Logger:
     def write_log(self, logger_level: LoggerLevels, logger_message: str):
         if not self.__logging_enabled:
             return
-        if self.is_open():
-            date_and_time = datetime.now().strftime('%m-%d-%Y %H:%M:%S')
-            self.__file.write(f'DateTime - [{date_and_time}] :: LoggerLevel - {logger_level} :: LoggerMessage - '
-                              f'{logger_message}\n')
-            self.__file.flush()
+        if os.path.exists(self.file_path()):
+            if self.is_open():
+                while len(missed_logs_queue) > 0:
+                    missed_log = missed_logs_queue.pop(0)
+                    missed_log_log_level = missed_log[0]
+                    missed_log_log_message = missed_log[1]
+                    missed_log_date_and_time = missed_log[2]
+                    self.__file.write(
+                        f'!!MISSED_LOG!! :: DateTime - [{missed_log_date_and_time}] :: LoggerLevel - '
+                        f'{missed_log_log_level} :: LoggerMessage - {missed_log_log_message}\n')
+                    self.__file.flush()
+                date_and_time = datetime.now().strftime('%m-%d-%Y %H:%M:%S')
+                self.__file.write(f'DateTime - [{date_and_time}] :: LoggerLevel - {logger_level} :: LoggerMessage - '
+                                  f'{logger_message}\n')
+                self.__file.flush()
+        else:
+            self.__file = self._open_log_file()
+            missed_date_and_time = datetime.now().strftime('%m-%d-%Y %H:%M:%S')
+            missed_logs_queue.append([logger_level, logger_message, missed_date_and_time])
 
     def rename_log_file(self, to_name: str):
         if not self.__logging_enabled:

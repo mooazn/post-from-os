@@ -11,10 +11,10 @@ class Tweet:
         self.access_token_secret = access_token_secret
         self.post_url = 'https://api.twitter.com/2/tweets'
         twitter_auth = tweepy.OAuth1UserHandler(
-            api_key,
-            api_key_secret,
-            access_token,
-            access_token_secret
+            self.api_key,
+            self.api_key_secret,
+            self.access_token,
+            self.access_token_secret
         )
         self.twitter = tweepy.API(twitter_auth)
         self.oauth = OAuth1Session(None)
@@ -34,7 +34,8 @@ class Tweet:
                 )
             except Exception as e:
                 print('Invalid tokens supplied for Twitter:', e)
-                self.twitter.session.close()
+                self.close()
+                raise e
 
     def close(self):
         self.twitter.session.close()

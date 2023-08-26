@@ -130,8 +130,11 @@ class _PostFromOpenSeaDiscord:
 
     def create_rare_trait_list(self, token_id):
         if self.total_supply == -1:
+            test_coll_headers = CaseInsensitiveDict()
+            test_coll_headers['User-Agent'] = self.ua.random
+            test_coll_headers['x-api-key'] = self.os_api_key
             test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(self.collection_name)
-            test_response = requests.get(test_collection_name_url)
+            test_response = requests.get(test_collection_name_url, headers=test_coll_headers, timeout=3)
             if test_response.status_code == 200:
                 collection_json = test_response.json()['collection']
                 stats_json = collection_json['stats']

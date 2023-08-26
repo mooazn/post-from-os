@@ -47,15 +47,15 @@ class _OpenSeaTransactionObjectInstagram:
 
 
 class _PostFromOpenSeaInstagram:
-    def __init__(self, values_file, contract_address):
+    def __init__(self, values_file, contract_address, long_token):
         instagram_values_file = values_file
-        self.instagram_access_token_file = 'instagram_user_access_token_{}.txt'.format(contract_address)
+        self.long_token = long_token
         self.values = open(instagram_values_file, 'r')
+        self.os_api_key = self.values.readline().strip()
         self.insta_tags = self.values.readline()
         self.collection_name = self.values.readline().strip()
         self.img_bb_key = self.values.readline().strip()
         self.page_id = self.values.readline().strip()
-        self.os_api_key = self.values.readline().strip()
         self.values.close()
         self.contract_address = contract_address
         self.file_name = self.collection_name + '_instagram.jpeg'
@@ -204,11 +204,7 @@ class _PostFromOpenSeaInstagram:
 
     def post_to_instagram(self):
         try:
-            user_access_token_file = open(self.instagram_access_token_file, 'r')
-            user_access_token = user_access_token_file.readline()
-            user_access_token_file.close()
-
-            querystring = {"access_token": user_access_token}
+            querystring = {"access_token": self.long_token}
             headers = {"Accept": "application/json"}
             response = requests.get(self.insta_id_url, headers=headers, params=querystring, timeout=5)
             insta_id = response.json()['instagram_business_account']['id']
@@ -216,7 +212,7 @@ class _PostFromOpenSeaInstagram:
             pre_upload_url = self.graph_api_url + '{}/media'.format(insta_id)
             pre_upload = {'image_url': self.image_link,
                           'caption': self.os_obj_to_post.insta_caption,
-                          'access_token': user_access_token}
+                          'access_token': self.long_token}
             pre_upload_request = requests.post(pre_upload_url, data=pre_upload, timeout=10)
             pre_upload_result = pre_upload_request.json()
 
@@ -225,7 +221,7 @@ class _PostFromOpenSeaInstagram:
                 publish_url = self.graph_api_url + '{}/media_publish'.format(insta_id)
                 publish = {
                     'creation_id': creation_id,
-                    'access_token': user_access_token
+                    'access_token': self.long_token
                 }
                 requests.post(publish_url, data=publish, timeout=10)
                 self.os_obj_to_post.is_posted = True
@@ -245,21 +241,36 @@ class ManageFlowObj:
     def __init__(self, instagram_values_file, instagram_generate_long_user_token_credentials_file):
         self.instagram_values_file = instagram_values_file
         self.instagram_gen_token_file = instagram_generate_long_user_token_credentials_file
-        self.contract_address = self.validate_params()
+        self.validate = self.validate_params()
+        self.contract_address = self.validate[0]
+        self.long_token = self.validate[1]
         self.begin_time = int(time.time())
         # self.gen_long_lived_token_class = GenerateLongLivedToken(self.instagram_gen_token_file, contract_address)
         # first_time_generated = self.gen_long_lived_token_class.generate()
         # if first_time_generated:
         #     print('Generated token for first time!', flush=True)
-        self.__base_obj = _PostFromOpenSeaInstagram(self.instagram_values_file, self.contract_address)
+        self.__base_obj = _PostFromOpenSeaInstagram(self.instagram_values_file, self.contract_address, self.long_token)
         self.begin()
 
     def validate_params(self):
         print('Beginning validation of Instagram Values File...')
         with open(self.instagram_values_file) as values_file:
-            if len(values_file.readlines()) != 5:
+            if len(values_file.readlines()) != 6:
                 raise Exception('The Instagram Values file must be formatted correctly.')
         test_instagram_values = open(self.instagram_values_file, 'r')
+        test_os_key = test_instagram_values.readline().strip()
+        if test_os_key != 'None':
+            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
+            test_os_headers = CaseInsensitiveDict()
+            test_os_headers['Accept'] = 'application/json'
+            test_os_headers['x-api-key'] = test_os_key
+            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=2)
+            if test_os_response.status_code != 200:
+                test_instagram_values.close()
+                raise Exception('Invalid OpenSea API key supplied.')
+            print('OpenSea Key validated...')
+        else:
+            print('No OpenSea API Key supplied...')
         hashtags_test = test_instagram_values.readline().strip()
         hashtags = 0
         words_in_hash_tag = hashtags_test.split()
@@ -280,9 +291,12 @@ class ManageFlowObj:
                 test_instagram_values.close()
                 raise Exception('All words must be preceded by a hashtag (#).')
         print('Hashtags validated...')
+        test_coll_headers = CaseInsensitiveDict()
+        test_coll_headers['Accept'] = 'application/json'
+        test_coll_headers['x-api-key'] = test_os_key
         collection_name_test = test_instagram_values.readline().strip()
         test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name_test)
-        test_response = requests.get(test_collection_name_url, timeout=1.5)
+        test_response = requests.get(test_collection_name_url, headers=test_coll_headers, timeout=1.5)
         if test_response.status_code == 200:
             collection_json = test_response.json()['collection']
             primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
@@ -312,21 +326,9 @@ class ManageFlowObj:
             test_instagram_values.close()
             raise Exception('Invalid page ID for Facebook supplied')
         print('Facebook page ID validated...')
-        test_os_key = test_instagram_values.readline().strip()
-        if test_os_key != 'None':
-            test_os_key_url = 'https://api.opensea.io/api/v1/events?only_opensea=false'
-            test_os_headers = CaseInsensitiveDict()
-            test_os_headers['Accept'] = 'application/json'
-            test_os_headers['x-api-key'] = test_os_key
-            test_os_response = requests.get(test_os_key_url, headers=test_os_headers, timeout=2)
-            if test_os_response.status_code != 200:
-                test_instagram_values.close()
-                raise Exception('Invalid OpenSea API key supplied.')
-            print('OpenSea Key validated...')
-        else:
-            print('No OpenSea API Key supplied...')
+        long_token = test_instagram_values.readline().strip()
         print('Validation of Instagram Values .txt complete. No errors found...')
-        return contract_address
+        return [contract_address, long_token]
 
     def run_methods(self, date_time_now):
         self.check_os_api_status(date_time_now)
@@ -522,12 +524,12 @@ class ManageFlowObj:
 #
 
     def send_email_to_manually_change_user_token(self):
-        self.user_access_token_file = 'instagram_user_access_token_{}.txt'.format(self.contract_address)
+        user_access_token_file = 'instagram_user_access_token_{}.txt'.format(self.contract_address)
         tokens = open(self.instagram_gen_token_file, 'r')
         self.client_id = tokens.readline().strip()
         self.client_secret = tokens.readline().strip()
-        self.facebook_email = tokens.readline().strip()
-        self.facebook_password = tokens.readline().strip()
+        facebook_email = tokens.readline().strip()
+        facebook_password = tokens.readline().strip()
         self.gmail_email = tokens.readline().strip()
         self.gmail_password = tokens.readline().strip()
         self.gmail_to_email = tokens.readline().strip()
@@ -537,7 +539,6 @@ class ManageFlowObj:
         smtp_port = 587
         smtp_username = self.gmail_email
         smtp_password = self.gmail_password
-
         email_to = [self.gmail_to_email]
         email_from = self.gmail_email
         email_subject = "Refresh Exchange Token"
@@ -550,7 +551,7 @@ class ManageFlowObj:
                '\'short_lived_access_token\' field and run the program. Once the program outputs the long lived user ' \
                'token, copy and paste that token into the file where the token is kept. In your case, the file is ' \
                'called {}. Because automatic execution failed, ensure that the selenium code is properly working.'.\
-            format(self.facebook_email, self.facebook_password, self.user_access_token_file)
+            format(facebook_email, facebook_password, user_access_token_file)
         msg = MIMEText(data)
         msg['Subject'] = email_subject
         msg['To'] = email_space.join(email_to)

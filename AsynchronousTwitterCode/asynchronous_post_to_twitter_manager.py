@@ -1,52 +1,52 @@
 import sys
 sys.path.append('../')
 from HelperCode import find_file  # noqa: E402
+from HelperCode.tweet import Tweet  # noqa: E402
 import importlib  # noqa: E402
 import math  # noqa: E402
 import requests  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
-from twython import Twython  # noqa: E402
-import twython.exceptions  # noqa: E402
 
 
 def generate_asynchronous_code(values_map, file_name):
     create_async_code_file = open(file_name, 'w')
     create_async_code_file.write('''import asyncio\nfrom asynchronous_post_to_twitter_obj import ManageFlowObj\n\n\n''')
-    boiler_plate_code = '''    
+    boiler_plate_code = '''
+    SLEEP_TIME = 100    
     while True:
         os_status = obj.check_os_api_status()
         if not os_status:
             ether_scan_status = obj.check_ether_scan_api_status()
             if ether_scan_status == -1:
-                await asyncio.sleep(30)
+                await asyncio.sleep(SLEEP_TIME)
                 continue
             elif not ether_scan_status:
-                await asyncio.sleep(5)
+                await asyncio.sleep(SLEEP_TIME)
                 continue
             else:
                 download_image = obj.try_to_download_image()
                 if not download_image:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(SLEEP_TIME)
                     continue
                 res = obj.try_to_post_to_twitter()
                 if res:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(SLEEP_TIME)
                 else:
-                    await asyncio.sleep(10)
+                    await asyncio.sleep(SLEEP_TIME)
                 continue
         exists = obj.check_if_new_post_exists()
         if not exists:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         download_image = obj.try_to_download_image()
         if not download_image:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
             continue
         res = obj.try_to_post_to_twitter()
         if res:
-            await asyncio.sleep(5)
+            await asyncio.sleep(SLEEP_TIME)
         else:
-            await asyncio.sleep(10)
+            await asyncio.sleep(SLEEP_TIME)
     '''
     space = ' ' * 4
     for index in values_map:
@@ -82,7 +82,6 @@ class ManageMultipleTwitterPosts:
         self.values_map = {}
         self.create_map()
         generate_asynchronous_code(self.values_map, self.file_name)
-        print('Beginning program...')
         async_code = importlib.import_module(self.file_name[:-3])
         async_code.run(self.values_map)
 
@@ -108,6 +107,7 @@ class ManageMultipleTwitterPosts:
         collection_count = len(hashtag_collections)
         if len(self.args) != collection_count:
             raise Exception('The number of args is not the same as the number of collections.')
+
         count = 1
         for arg in self.args:
             if type(arg) is list:
@@ -155,51 +155,6 @@ class ManageMultipleTwitterPosts:
             print('Hashtag for collection {} validated...'.format(count))
             count += 1
         print('Hashtag for all collections validated...')
-        collection_name_test = values_file_test.readline().strip()
-        if '|' not in collection_name_test:
-            values_file_test.close()
-            raise Exception('Collection names should be separated by \"|\"')
-        collection_names = collection_name_test.split('|')
-        if len(collection_names) != collection_count:
-            values_file_test.close()
-            raise Exception('The length of provided collection names does not match the length of the hashtags.')
-        count = 1
-        for collection_name in collection_names:
-            test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name.strip())
-            test_response = requests.get(test_collection_name_url, timeout=1)
-            if test_response.status_code == 200:
-                collection_json = test_response.json()['collection']
-                stats_json = collection_json['stats']
-                total_supply = int(stats_json['total_supply'])
-                primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
-                contract_address = primary_asset_contracts_json['address']
-                self.collection_stats.append([total_supply, contract_address])
-            else:
-                values_file_test.close()
-                raise Exception('The provided collection {} does not exist.'.format(count))
-            print('Collection {} validated...'.format(count))
-            self.collection_names.append(collection_name.strip())
-            count += 1
-        print('All collection names validated...')
-        api_key = values_file_test.readline().strip()
-        api_key_secret = values_file_test.readline().strip()
-        access_token = values_file_test.readline().strip()
-        access_token_secret = values_file_test.readline().strip()
-        twitter_test = Twython(
-            api_key,
-            api_key_secret,
-            access_token,
-            access_token_secret
-        )
-        try:
-            twitter_test.verify_credentials()
-            twitter_test.client.close()
-        except twython.exceptions.TwythonAuthError:
-            values_file_test.close()
-            twitter_test.client.close()
-            raise Exception('Invalid Twitter Keys supplied.')
-        self.twitter_keys = [api_key, api_key_secret, access_token, access_token_secret]
-        print('Twitter credentials validated...')
         test_os_keys = values_file_test.readline().strip()
         if test_os_keys is None or len(test_os_keys) == 0:
             values_file_test.close()
@@ -228,6 +183,46 @@ class ManageMultipleTwitterPosts:
             self.os_keys.append(os_key.strip())
             count += 1
         print('All Opensea keys validated...')
+        collection_name_test = values_file_test.readline().strip()
+        if '|' not in collection_name_test:
+            values_file_test.close()
+            raise Exception('Collection names should be separated by \"|\"')
+        collection_names = collection_name_test.split('|')
+        if len(collection_names) != collection_count:
+            values_file_test.close()
+            raise Exception('The length of provided collection names does not match the length of the hashtags.')
+        count = 1
+        test_coll_headers = CaseInsensitiveDict()
+        test_coll_headers['Accept'] = 'application/json'
+        test_coll_headers['x-api-key'] = self.os_keys[0]
+        for collection_name in collection_names:
+            test_collection_name_url = 'https://api.opensea.io/api/v1/collection/{}'.format(collection_name.strip())
+            test_response = requests.get(test_collection_name_url, headers=test_coll_headers, timeout=1)
+            if test_response.status_code == 200:
+                collection_json = test_response.json()['collection']
+                stats_json = collection_json['stats']
+                total_supply = int(stats_json['total_supply'])
+                primary_asset_contracts_json = collection_json['primary_asset_contracts'][0]  # got the contract address
+                contract_address = primary_asset_contracts_json['address']
+                self.collection_stats.append([total_supply, contract_address])
+            else:
+                values_file_test.close()
+                raise Exception('The provided collection {} does not exist.'.format(count))
+            print('Collection {} validated...'.format(count))
+            self.collection_names.append(collection_name.strip())
+            count += 1
+        print('All collection names validated...')
+        api_key = values_file_test.readline().strip()
+        api_key_secret = values_file_test.readline().strip()
+        access_token = values_file_test.readline().strip()
+        access_token_secret = values_file_test.readline().strip()
+        try:
+            Tweet(api_key, api_key_secret, access_token, access_token_secret)
+        except Exception as e:
+            values_file_test.close()
+            raise Exception('Invalid Twitter Keys supplied.', e)
+        self.twitter_keys = [api_key, api_key_secret, access_token, access_token_secret]
+        print('Twitter credentials validated...')
         test_ether_scan_values = values_file_test.readline().strip()
         if test_ether_scan_values is None or len(test_ether_scan_values) == 0:
             values_file_test.close()

@@ -2,12 +2,12 @@ import sys
 sys.path.append('../')
 import datetime  # noqa: E402
 from fake_useragent import UserAgent  # noqa: E402
+from HelperCode.tweet import Tweet  # noqa: E402
 from operator import itemgetter  # noqa: E402
 import requests  # noqa: E402
 from requests.structures import CaseInsensitiveDict  # noqa: E402
 import time  # noqa: E402
 from tinydb import TinyDB, Query  # noqa: E402
-from twython import Twython  # noqa: E402
 
 
 class _OpenSeaTransactionObject:
@@ -84,7 +84,7 @@ class _PostFromOpenSeaTwitter:
         self.tx_queue = []
         self.os_limit = 10
         self.ether_scan_limit = int(self.os_limit * 1.5)
-        self.twitter = Twython(
+        self.tweet = Tweet(
             self.twitter_keys[0],
             self.twitter_keys[1],
             self.twitter_keys[2],
@@ -93,7 +93,7 @@ class _PostFromOpenSeaTwitter:
         self.ua = UserAgent()
 
     def __del__(self):
-        self.twitter.client.close()
+        self.tweet.close()
 
     def get_recent_sales(self):  # gets {limit} most recent sales
         if self.os_api_key == 'None':
@@ -342,37 +342,22 @@ class _PostFromOpenSeaTwitter:
             return -1
 
     def post_to_twitter(self):
-        try:
-            if self.os_obj_to_post.image_url is None:
-                self.twitter.update_status(status=self.os_obj_to_post.twitter_caption)
-                self.tx_db.insert({'tx': self.os_obj_to_post.key})
-                self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
-                self.os_obj_to_post.is_posted = True
-                return True
-        except Exception as e:
-            print(e, flush=True)
-            return False
-        image = open(self.file_name, 'rb')
-        try:
-            response = self.twitter.upload_media(media=image)
-            image.close()
-            media_id = [response['media_id']]
-            self.twitter.update_status(status=self.os_obj_to_post.twitter_caption, media_ids=media_id)
-            self.os_obj_to_post.is_posted = True
+        if self.os_obj_to_post.image_url is None:
+            res = self.tweet.post(self.os_obj_to_post.twitter_caption)
+            if res == -1:
+                return False
             self.tx_db.insert({'tx': self.os_obj_to_post.key})
             self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+            self.os_obj_to_post.is_posted = True
             return True
-        except Exception as e:
-            image.close()
-            print(e, flush=True)
-            return False
 
-    def delete_twitter_posts(self, count=200):
-        if count > 200:
+        res = self.tweet.post(self.os_obj_to_post.twitter_caption, self.file_name)
+        if res == -1:
             return False
-        for i in self.twitter.get_user_timeline(count=count):
-            status = int(i['id_str'])
-            self.twitter.destroy_status(id=status)
+        self.os_obj_to_post.is_posted = True
+        self.tx_db.insert({'tx': self.os_obj_to_post.key})
+        self.tx_db.insert({'tx': self.os_obj_to_post.tx_hash})
+        return True
 
 
 class ManageFlowObj:
